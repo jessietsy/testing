@@ -26,26 +26,40 @@ def insert(filename, build_system, metrics, evaluation, overall_rating, errors):
                  VALUES (?, ?, ?, ?, ?, ?, ?)
                  """, (filename, datetime.datetime.now(), build_system, json.dumps(metrics), json.dumps(evaluation), evaluation.get(overall_rating) if evaluation else None, json.dumps(errors)))
     conn.commit()
+    evaluation_id = cursor.lastrowid
     conn.close()
+    return evaluation_id
     
 def get_all():
     conn = sqlite3.connect('evaluation.db')
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('''SELECT * FROM evaluations 
                    ORDER BY submitted_at DESC
                    ''')
+   
     result = conn.fetchall()
+    rows = [dict(row) for row in result]
     conn.close()
-    return result
+    return rows
 
 def get_by_id(evaluation_id):
     conn = sqlite3.connect('evaluation.db')
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('''SELECT * FROM evaluations
                    WHERE id = ?
                    ''', (evaluation_id,))
-    result = cursor.fetchall()
+    row = cursor.fetchone()
     conn.close()
+
+    if not row:
+        return None
+    
+    result = dict(row)
+    result['metrics'] = json.loads(result['metrics'])
+    result['evaluation'] = json.loads(result['evaluation'])
+    result['errors'] = json.loads(result['errors'])
+
     return result
 
-print(datetime.datetime.now().isoformat())
