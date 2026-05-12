@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Software Quality Evaluation</title>
+    <title>Software Quality Evaluation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">    
 </head>
 <body>
-<h1>Software Quality Evaluation</h1>
-<p>ISO/IEC 25010 - Performance Efficiency</p>
-<form action="/" method="post" enctype="multipart/form-data">
-    <label>Choose ZIP file: <input type='file' name ='file'></label><br><br>
-    <button type='submit'>Start Evaluation</button>
+    <h1>Software Quality Evaluation</h1>
+    <p>ISO/IEC 25010 - Performance Efficiency</p>
+    <form action="/evaluate" method="post" enctype="multipart/form-data">
+        <label>Choose ZIP file: <input type='file' name ='file'></label><br><br>
+        <button type='submit'>Start Evaluation</button>
 
-</form>
+    </form>
 
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
