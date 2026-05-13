@@ -1,7 +1,7 @@
 from google import genai 
 import json
 
-client = genai.Client() # client gets API key from environment variable 'GEMINI_API_KEY' (if not set, it must be passed as argument)
+client = genai.Client(api_key="AIzaSyCzZRdBKp8ov3axNLwgU0JhmTsytLckPxg") # client gets API key from environment variable 'GEMINI_API_KEY' (if not set, it must be passed as argument)
 model_used = 'gemini-2.5-flash'
 
 def format_code_samples(samples): # select java files to send so that AI can help identify the causes behind the poor performance etc.
@@ -76,5 +76,4 @@ def evaluate(metrics, build_system):
         result['errors'].append('Error during evaluation: ' + str(e))
 
     return result
-
 

@@ -8,10 +8,13 @@
     <h1>Software Quality Evaluation</h1>
     <p>ISO/IEC 25010 - Performance Efficiency</p>
     <form action="/evaluate" method="post" enctype="multipart/form-data">
-        <label>Choose ZIP file: <input type='file' name ='file'></label><br><br>
-        <button type='submit'>Start Evaluation</button>
+        <label>Choose ZIP file: <input type='file' id="'file-input" name ='file'></label><br><br>
+        <button id="evaluate" type='submit'>Start Evaluation</button>
 
     </form>
+
+    <div id="status"></div>
+    <div id="results"></div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

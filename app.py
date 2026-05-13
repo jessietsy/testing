@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from detector import detect_java_files
-from docker_run import docker_build
+# from docker_run import docker_build
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
 import os, zipfile
@@ -41,16 +41,23 @@ def evaluator():
         return jsonify({'errors': detection['errors']}), 400
     
     
-    result = docker_build(detection['project_root'], detection['build_system'])
-    if not result['build_success']:
-        return jsonify({'errors': result['errors']}), 400
+    # result = docker_build(detection['project_root'], detection['build_system'])
+    # if not result['build_success']:
+    #     return jsonify({'errors': result['errors']}), 400
 
     # Temp placeholder values for testing as metric collection has some issues
-    
+    # Temp placeholder values for docker run results due to installatoin issues on Interet laptop
+    result = {
+        'build_success': True,
+        'run_success': True,
+        'metrics': {},
+        'errors': []
+    }
+
     result['metrics'] = {
         'response_time_seconds': 0.1,
         'cpu_percent': 50.0,
-        'memory_usage_mb': 100.0,
+        'memory_usage': 100.0,
         'memory_percent': 25.0
     }
     print(result['metrics'])
