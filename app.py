@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from detector import detect_java_files
-# from docker_run import docker_build
+from docker_runner import run_and_measure
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
 import os, zipfile
@@ -41,26 +41,26 @@ def evaluator():
         return jsonify({'errors': detection['errors']}), 400
     
     
-    # result = docker_build(detection['project_root'], detection['build_system'])
-    # if not result['build_success']:
-    #     return jsonify({'errors': result['errors']}), 400
+    result = run_and_measure(detection['project_root'], detection['build_system'])
+    if not result['build_success']:
+        return jsonify({'errors': result['errors']}), 400
 
-    # Temp placeholder values for testing as metric collection has some issues
-    # Temp placeholder values for docker run results due to installatoin issues on Interet laptop
-    result = {
-        'build_success': True,
-        'run_success': True,
-        'metrics': {},
-        'errors': []
-    }
+    
+    # result = {
+    #     'build_success': True,
+    #     'run_success': True,
+    #     'metrics': {},
+    #     'errors': []
+    # }
 
-    result['metrics'] = {
-        'response_time_seconds': 0.1,
-        'cpu_percent': 50.0,
-        'memory_usage': 100.0,
-        'memory_percent': 25.0
-    }
+    # result['metrics'] = {
+    #     'response_time_seconds': 0.1,
+    #     'cpu_percent': 50.0,
+    #     'memory_usage': 100.0,
+    #     'memory_percent': 25.0
+    # }
     print(result['metrics'])
+
     eval_result = evaluate(result['metrics'], detection['build_system'])
     if not eval_result['success']:
         return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
@@ -68,6 +68,7 @@ def evaluator():
     # Save result to database
     eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
     return jsonify({'evaluation_id': eval_id, 'metrics': result['metrics'], 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+
 
 @app.route('/history')
 def history():
