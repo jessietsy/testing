@@ -207,4 +207,4 @@ def discover_endpoints_from_actuator(host, port, timeout=30):
         return None
     
 
-print(detect_endpoints('uploads/project\\E-commerce-project-springBoot-master'))
+print(detect_endpoints('uploads/project/E-commerce-project-springBoot-master'))

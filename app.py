@@ -3,6 +3,7 @@ from detector import detect_java_files
 from docker_runner import run_and_measure
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
+from endpoint_detector import detect_endpoints
 import os, zipfile
 
 app = Flask(__name__)
@@ -17,7 +18,7 @@ def index():
 
 @app.route('/evaluate', methods=['POST'])
 def evaluator():
-    create_tables() # intialise database and tables if they don't exist yet
+    create_tables() # Initialise database and tables if they don't exist yet
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
     
@@ -40,7 +41,8 @@ def evaluator():
     if detection['errors']:
         return jsonify({'errors': detection['errors']}), 400
     
-    
+    # Detect endpoints and run load test
+    endpoints = detect_endpoints(detection['project_root'])
     result = run_and_measure(detection['project_root'], detection['build_system'])
     if not result['build_success']:
         return jsonify({'errors': result['errors']}), 400
@@ -61,6 +63,7 @@ def evaluator():
     # }
     print(result['metrics'])
 
+    # Evaluation using AI model
     eval_result = evaluate(result['metrics'], detection['build_system'])
     if not eval_result['success']:
         return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
