@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-from detector import detect_java_files
+from file_detector import detect_java_files
 from docker_runner import run_and_measure
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
@@ -38,12 +38,15 @@ def evaluator():
 
 
     detection = detect_java_files(extract_path)
+    print(detection)
     if detection['errors']:
         return jsonify({'errors': detection['errors']}), 400
     
     # Detect endpoints and run load test
     endpoints = detect_endpoints(detection['project_root'])
-    result = run_and_measure(detection['project_root'], detection['build_system'])
+    print(endpoints)
+
+    result = run_and_measure(detection['project_root'], detection['build_system'], endpoints)
     if not result['build_success']:
         return jsonify({'errors': result['errors']}), 400
 
@@ -61,15 +64,15 @@ def evaluator():
     #     'memory_usage': 100.0,
     #     'memory_percent': 25.0
     # }
-    print(result['metrics'])
+    print(result)
 
     # Evaluation using AI model
-    eval_result = evaluate(result['metrics'], detection['build_system'])
-    if not eval_result['success']:
-        return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
+    # eval_result = evaluate(result['metrics'], detection['build_system'])
+    # if not eval_result['success']:
+    #     return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
     
-    # Save result to database
-    eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
+    # # Save result to database
+    # eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
     return jsonify({'evaluation_id': eval_id, 'metrics': result['metrics'], 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
 
 

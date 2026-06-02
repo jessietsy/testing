@@ -1,37 +1,45 @@
-import docker, time, os, requests, json, subprocess, threading
+import docker, time, os, requests, json, subprocess, threading, re
 client = docker.from_env()
 
+def sanitise_path(path):
+    return re.sub(r'\{[^}]+\}', '1', path) # replace path variables like {id} with dummy value '1' for testing purposes
 
 def generate_locust(endpoints, output_path):
     tasks = ''
     for i, ep in enumerate(endpoints):
+        path = sanitise_path(ep['path'])
         tasks += f"""\
-        @task
-        def endpoint_{i}(self):
-            self.client.{ep['method'].lower()}('{ep['path']}')
-
-        """
+    @task
+    def endpoint_{i}(self):
+        with self.client.{ep['method'].lower()}('{path}', catch_response=True) as response:
+            if reponse.status_code == 0:
+                response.failure('No response')
+            elif response.status_code >= 400:
+                response.failure(f'Status code {{response.status_code}}')
+            else:
+                response.success()
+        
+"""
     
     content = f"""\
-    from locust import HttpUser,task, between
-    class AppUser(HttpUser):
-        wait_time = between(1, 2)
+from locust import HttpUser,task, between
+class AppUser(HttpUser):
+    wait_time = between(1, 2)
 
-    {tasks}
-    """
+{tasks}"""
     locust_path = os.path.join(output_path, 'locustfile.py')
     with open(locust_path, 'w') as file:
         file.write(content)
 
     return locust_path
 
-def wait_for_app(host, port, timeout=60):
+def wait_for_app(host, port, timeout=120):
     # Check if app is responding before starting tests
     start = time.time()
     while time.time() - start < timeout:
         try:
             response = requests.get(f'http://{host}:{port}', timeout=2)
-            if response.status_code == 200:
+            if response.status_code < 500:
                 print('App is responding')
                 return True
             
@@ -53,7 +61,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
     # wait for app to start
     print(f'Waiting for app on port {port}...')
     if not wait_for_app(host, port):
-        result['errors'].append('App did not start within 60 seconds')
+        result['errors'].append('App did not start within 120 seconds')
         return result
 
     print('App is ready, starting load test...')
@@ -63,7 +71,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
     'locust',
     '--headless',
     '--locustfile', locust_path,
-    '--host', f'http://{host}:{port}',
+    '--host', f'http://127.0.0.1:{port}',
     '--users', str(users),
     '--spawn-rate', '2',
     '--run-time', f'{duration}s',
@@ -115,6 +123,8 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
         )
 
         stats_thread.join(timeout=5)
+        print('Locust stdout:', proc.stdout)
+        print('Locust stderr:', proc.stderr)
 
         # parse locust JSON output
         if proc.stdout:
@@ -161,6 +171,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
                 result['errors'].append(f'Could not parse locust output: {str(e)}')
                 if proc.stderr:
                     result['errors'].append(proc.stderr[:500])
+
         else:
             result['errors'].append('Locust produced no output')
             if proc.stderr:
@@ -172,3 +183,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
         result['errors'].append(f'Load test failed: {str(e)}')
 
     return result
+
+
+
+locust_path = generate_locust([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}], 'uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend')

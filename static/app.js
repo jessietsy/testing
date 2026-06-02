@@ -56,7 +56,7 @@ async function runEvaluation() {
         // Update message while waiting
         setTimeout(() => setLoadingMessage('Building Docker container...'), 3000)
         setTimeout(() => setLoadingMessage('Running project and collecting metrics...'), 8000)
-        setTimeout(() => setLoadingMessage('Analysing with Claude...'), 20000)
+        setTimeout(() => setLoadingMessage('Analysing with Gemini...'), 20000)
 
         const response = await fetch('/evaluate', {
             method: 'POST',
