@@ -1,36 +1,55 @@
-import docker, os, time
+import docker, os, time, re
 from locust_runner import run_test
 
 client = docker.from_env()
 
-DOCKERFILE_MAVEN = """\
-FROM maven:3.9-eclipse-temurin-17
+def detect_java_version(project_root): # detect java version to use appropriate base image for Dockerfile
+    pom_path = os.path.join(project_root, 'pom.xml')
+    if not os.path.exists(pom_path): 
+        return '17' # default to 17 if no pom.xml found
+
+    with open(pom_path, 'r', errors='ignore') as f:
+        content = f.read()
+
+    # Look for java.version in pom.xml (common convention) 
+    match = re.search(r'<java\.version>(\d+)</java\.version>', content)
+    if match:
+        return match.group(1)
+
+    # Look for maven.compiler.source as fallback
+    match = re.search(r'<maven\.compiler\.source>(\d+)</maven\.compiler\.source>', content)
+    if match:
+        return match.group(1)
+    
+    return '17' # default if no version found
+
+
+def dockerfile(build_system, project_root):
+    java_version = detect_java_version(project_root)
+    if build_system == 'maven':
+        return f"""\
+FROM maven:3.9-eclipse-temurin-{java_version}
 WORKDIR /app
 COPY . .
 RUN mvn package -DskipTests -q
 CMD ["sh", "-c", "java -jar target/*.jar"]
 """
-
-DOCKERFILE_GRADLE = """\
-FROM gradle:8.5-jdk17
+    
+    elif build_system == 'gradle':
+        return f"""\
+FROM gradle:8.5-jdk{java_version}
 WORKDIR /app
 COPY . .
 RUN gradle build -x test -q
 CMD ["sh", "-c", "java -jar build/libs/*.jar"]
 """
-
-def dockerfile(build_system):
-    if build_system == 'maven':
-        return DOCKERFILE_MAVEN
-    elif build_system == 'gradle':
-        return DOCKERFILE_GRADLE
     else:
         raise ValueError(f'Unsupported build system: {build_system}')
     
 
-def write_dockerfile(build_system, extract_path):
-    content = dockerfile(build_system)
-    docker_path = os.path.join(extract_path, 'Dockerfile')
+def write_dockerfile(build_system, project_root):
+    content = dockerfile(build_system, project_root)
+    docker_path = os.path.join(project_root, 'Dockerfile')
     with open(docker_path, 'w') as f:
         f.write(content)
     return docker_path
@@ -152,3 +171,5 @@ def run_and_measure(project_root, build_system, endpoints):
                 pass
     return result
 
+
+print(detect_java_version('uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend'))

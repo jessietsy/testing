@@ -46,9 +46,9 @@ def evaluator():
     endpoints = detect_endpoints(detection['project_root'])
     print(endpoints)
 
-    result = run_and_measure(detection['project_root'], detection['build_system'], endpoints)
-    if not result['build_success']:
-        return jsonify({'errors': result['errors']}), 400
+    # result = run_and_measure(detection['project_root'], detection['build_system'], endpoints)
+    # if not result['build_success']:
+    #     return jsonify({'errors': result['errors']}), 400
 
     
     # result = {
@@ -64,15 +64,16 @@ def evaluator():
     #     'memory_usage': 100.0,
     #     'memory_percent': 25.0
     # }
+    result = {'build_success': True, 'run_success': True, 'metrics': {'avg_response_time_ms': 0, 'min_response_time_ms': 16.01, 'max_response_time_ms': 612.07, 'p95_response_time_ms': 0, 'requests_per_second': 0, 'cpu_peak_percent': 30.03, 'cpu_average_percent': 8.45, 'memory_peak_mb': 211.12, 'memory_average_mb': 207.26, 'total_requests': 19, 'failed_requests': 19, 'failure_rate_percent': 100.0, 'concurrent_users': 10}, 'errors': []}
     print(result)
 
     # Evaluation using AI model
-    # eval_result = evaluate(result['metrics'], detection['build_system'])
-    # if not eval_result['success']:
-    #     return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
+    eval_result = evaluate(result['metrics'], detection['build_system'])
+    if not eval_result['success']:
+        return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
     
-    # # Save result to database
-    # eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
+    # Save result to database
+    eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
     return jsonify({'evaluation_id': eval_id, 'metrics': result['metrics'], 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
 
 
