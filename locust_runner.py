@@ -1,5 +1,8 @@
 import docker, time, os, requests, json, subprocess, threading, re
+from  endpoint_detector import detect_endpoints, detect_port, discover_endpoints_from_actuator
+from scorer import score_all_endpoints, categorise_endpoint, ENDPOINT_CATEGORIES
 client = docker.from_env()
+
 
 def sanitise_path(path):
     return re.sub(r'\{[^}]+\}', '1', path) # replace path variables like {id} with dummy value '1' for testing purposes
@@ -47,6 +50,28 @@ def wait_for_app(host, port, timeout=120):
             time.sleep(2)
         
     return False
+
+
+def get_endpoints(project_root, container, host, port):
+    """
+    Try dynamic discovery first, fall back to static analysis
+    """
+    # Always do static analysis as baseline
+    static_endpoints = detect_endpoints(project_root)
+    print(f'Static analysis found {len(static_endpoints)} endpoints')
+
+    # Try Actuator for more accurate results
+    actuator_endpoints = discover_endpoints_from_actuator(host, port)
+    
+    if actuator_endpoints:
+        print(f'Actuator discovery found {len(actuator_endpoints)} endpoints')
+        return actuator_endpoints
+    
+    if static_endpoints:
+        print('Using static analysis endpoints')
+        return static_endpoints
+
+    return []
 
 def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.'):
     result = {
@@ -129,49 +154,47 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
         # parse locust JSON output
         if proc.stdout:
             try:
-                locust_stats = json.loads(proc.stdout)
-
-                # extract aggregate stats
-                aggregate = next(
-                    (s for s in locust_stats if s.get('name') == 'Aggregated'),
-                    locust_stats[-1] if locust_stats else {}
+                per_endpoint_metrics, aggregate = parse_locust_stats(
+                    proc.stdout,
+                    endpoints
                 )
 
-                # docker resource stats during load
+                scores = score_all_endpoints(per_endpoint_metrics)
+
+                # Aggregate resource metrics from Docker stats
                 cpu_samples = [s['cpu_percent'] for s in docker_stats]
                 memory_samples = [s['memory_mb'] for s in docker_stats]
 
                 result['metrics'] = {
-                    # time behaviour
-                    'avg_response_time_ms': round(aggregate.get('avg_response_time', 0), 2),
-                    'min_response_time_ms': round(aggregate.get('min_response_time', 0), 2),
-                    'max_response_time_ms': round(aggregate.get('max_response_time', 0), 2),
-                    'p95_response_time_ms': round(aggregate.get('response_time_percentile_0.95', 0), 2),
-                    'requests_per_second': round(aggregate.get('current_rps', 0), 2),
-
-                    # resource utilisation
-                    'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
-                    'cpu_average_percent': round(sum(cpu_samples) / len(cpu_samples), 2) if cpu_samples else 0,
-                    'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
-                    'memory_average_mb': round(sum(memory_samples) / len(memory_samples), 2) if memory_samples else 0,
-
-                    # capacity
-                    'total_requests': aggregate.get('num_requests', 0),
-                    'failed_requests': aggregate.get('num_failures', 0),
-                    'failure_rate_percent': round(
-                        aggregate.get('num_failures', 0) /
-                        aggregate.get('num_requests', 1) * 100, 2
-                    ),
-                    'concurrent_users': users
+                    'per_endpoint': per_endpoint_metrics,
+                    'aggregate': {
+                        'total_requests': aggregate.get('num_requests', 0),
+                        'failed_requests': aggregate.get('num_failures', 0),
+                        'failure_rate_percent': round(
+                            aggregate.get('num_failures', 0) /
+                            aggregate.get('num_requests', 1) * 100, 2
+                        ),
+                        'requests_per_second': round(
+                            aggregate.get('requests_per_sec', 0) or
+                            aggregate.get('current_rps', 0), 2
+                        ),
+                        'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
+                        'cpu_average_percent': round(
+                            sum(cpu_samples) / len(cpu_samples), 2
+                        ) if cpu_samples else 0,
+                        'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
+                        'memory_average_mb': round(
+                            sum(memory_samples) / len(memory_samples), 2
+                        ) if memory_samples else 0,
+                        'concurrent_users': users
+                    },
+                    'scores': scores
                 }
 
-                result['success'] = True
+                result['run_success'] = True
 
-            except (json.JSONDecodeError, IndexError) as e:
-                result['errors'].append(f'Could not parse locust output: {str(e)}')
-                if proc.stderr:
-                    result['errors'].append(proc.stderr[:500])
-
+            except Exception as e:
+                result['errors'].append(f'Stats parsing failed: {str(e)}')
         else:
             result['errors'].append('Locust produced no output')
             if proc.stderr:
@@ -185,5 +208,70 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
     return result
 
 
+def parse_locust_stats(locust_output, endpoints):
+    """Parse Locust JSON output into per-endpoint metrics"""
+    try:
+        stats_list = json.loads(locust_output)
+    except json.JSONDecodeError:
+        return {}, {}
 
-locust_path = generate_locust([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}], 'uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend')
+    # Build a map of path -> stats
+    endpoint_stats = {}
+    aggregate = {}
+
+    for stat in stats_list:
+        name = stat.get('name', '')
+        if name == 'Aggregated':
+            aggregate = stat
+        else:
+            endpoint_stats[name] = stat
+
+    # Match stats back to our endpoints
+    per_endpoint_metrics = {}
+    for ep in endpoints:
+        path = sanitise_path(ep['path'])
+        method = ep['method'].upper()
+        category = categorise_endpoint(method, ep['path'])
+
+        # Locust names entries as "GET /api/products"
+        locust_key = f"{method} {path}"
+        stat = endpoint_stats.get(locust_key, {})
+
+        per_endpoint_metrics[locust_key] = {
+            'method': method,
+            'path': ep['path'],
+            'sanitised_path': path,
+            'category': category,
+            'category_description': ENDPOINT_CATEGORIES.get(
+                category, {}
+            ).get('description', ''),
+            'metrics': {
+                'avg_response_time_ms': round(
+                    stat.get('avg_response_time', 0), 2
+                ),
+                'min_response_time_ms': round(
+                    stat.get('min_response_time', 0), 2
+                ),
+                'max_response_time_ms': round(
+                    stat.get('max_response_time', 0), 2
+                ),
+                'p95_response_time_ms': round(
+                    stat.get('response_time_percentile_0.95', 0) or
+                    stat.get('response_time_percentile_95', 0), 2
+                ),
+                'requests_per_second': round(
+                    stat.get('requests_per_sec', 0) or
+                    stat.get('current_rps', 0), 2
+                ),
+                'total_requests': stat.get('num_requests', 0),
+                'failed_requests': stat.get('num_failures', 0),
+                'failure_rate_percent': round(
+                    stat.get('num_failures', 0) /
+                    stat.get('num_requests', 1) * 100, 2
+                ) if stat.get('num_requests', 0) > 0 else 0
+            }
+        }
+
+    return per_endpoint_metrics, aggregate
+
+# locust_path = generate_locust([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}], 'uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend')

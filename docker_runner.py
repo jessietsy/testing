@@ -1,5 +1,5 @@
 import docker, os, time, re
-from locust_runner import run_test
+from locust_runner import run_test, get_endpoints
 
 client = docker.from_env()
 
@@ -54,7 +54,7 @@ def write_dockerfile(build_system, project_root):
         f.write(content)
     return docker_path
 
-def run_and_measure(project_root, build_system, endpoints):
+def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60):
     result = {
         'build_success': False,
         'run_success': False,
@@ -89,17 +89,24 @@ def run_and_measure(project_root, build_system, endpoints):
             mem_limit='512m', # resource limits
             nano_cpus=1_000_000_000, # equivalent to 1 CPU
             network_disabled=True, 
-            ports={'8080/tcp': 8080}, # expose app port for testing (port mapping allows us to access the app running inside the container from our host machine for load testing)
+            ports={f'{port}/tcp': port}, # expose app port for testing (port mapping allows us to access the app running inside the container from our host machine for load testing)
             remove=False) # returns container object
+    
+        print('Container started...')
+        actual_endpoints = get_endpoints(project_root, 'localhost', port)
+        if not actual_endpoints:
+            result['errors'].append('No endpoints found for testing')
+            result['run_success'] = False
+            return result
+    
         
-        print('Container started, waiting for it to finish...')
 
         # Run load test and collect metrics from locust and docker
         load_result = run_test(
             endpoints = endpoints,
             container=container,
             host='localhost',
-            port=8080,
+            port=port,
             duration=30,
             users=10,
             output_path=project_root    
@@ -172,4 +179,4 @@ def run_and_measure(project_root, build_system, endpoints):
     return result
 
 
-print(detect_java_version('uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend'))
+# print(detect_java_version('uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend'))

@@ -207,4 +207,5 @@ def discover_endpoints_from_actuator(host, port, timeout=30):
         return None
     
 
-print(detect_endpoints('uploads/project/SpringBoot-Reactjs-Ecommerce-main'))
+# print(detect_endpoints('uploads/project/SpringBoot-Reactjs-Ecommerce-main'))
+# print(extract_endpoints_from_file('uploads/project/SpringBoot-Reactjs-Ecommerce-main/src/main/java/com/example/ecommerce/controller/ProductController.java'))

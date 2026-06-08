@@ -48,4 +48,4 @@ def detect_java_files(extract_path):
 
     return result
 
-print(detect_java_files('uploads/project'))
+# print(detect_java_files('uploads/project'))

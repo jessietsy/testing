@@ -3,8 +3,8 @@ from file_detector import detect_java_files
 from docker_runner import run_and_measure
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
-from endpoint_detector import detect_endpoints
-import os, zipfile
+from endpoint_detector import detect_endpoints, detect_port
+import os, zipfile, shutil
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -32,50 +32,60 @@ def evaluator():
     extract_path = os.path.join(UPLOAD_FOLDER, 'project')
     os.makedirs(extract_path, exist_ok = True)
 
-    with zipfile.ZipFile(file, 'r') as myzip:
-        myzip.extractall(extract_path)
+    try: 
+        with zipfile.ZipFile(file, 'r') as myzip:
+            myzip.extractall(extract_path)
 
 
 
-    detection = detect_java_files(extract_path)
-    print(detection)
-    if detection['errors']:
-        return jsonify({'errors': detection['errors']}), 400
-    
-    # Detect endpoints and run load test
-    endpoints = detect_endpoints(detection['project_root'])
-    print(endpoints)
+        detection = detect_java_files(extract_path)
+        print(detection)
 
-    # result = run_and_measure(detection['project_root'], detection['build_system'], endpoints)
-    # if not result['build_success']:
-    #     return jsonify({'errors': result['errors']}), 400
+        if detection['errors']:
+            return jsonify({'errors': detection['errors']}), 400
+        
+        # Detect endpoints and run load test
+        port = detect_port(detection['project_root'])
+        static_endpoints = detect_endpoints(detection['project_root'])
+        print(f'Detected port: {port}')
+        print(f'Statically detected endpoints: {static_endpoints}')
 
-    
-    # result = {
-    #     'build_success': True,
-    #     'run_success': True,
-    #     'metrics': {},
-    #     'errors': []
-    # }
+        result = run_and_measure(detection['project_root'], detection['build_system'], static_endpoints, port=port) 
+        print(result)
+        if not result['build_success']:
+            return jsonify({'errors': result['errors']}), 400
 
-    # result['metrics'] = {
-    #     'response_time_seconds': 0.1,
-    #     'cpu_percent': 50.0,
-    #     'memory_usage': 100.0,
-    #     'memory_percent': 25.0
-    # }
-    result = {'build_success': True, 'run_success': True, 'metrics': {'avg_response_time_ms': 0, 'min_response_time_ms': 16.01, 'max_response_time_ms': 612.07, 'p95_response_time_ms': 0, 'requests_per_second': 0, 'cpu_peak_percent': 30.03, 'cpu_average_percent': 8.45, 'memory_peak_mb': 211.12, 'memory_average_mb': 207.26, 'total_requests': 19, 'failed_requests': 19, 'failure_rate_percent': 100.0, 'concurrent_users': 10}, 'errors': []}
-    print(result)
+        
+        # result = {
+        #     'build_success': True,
+        #     'run_success': True,
+        #     'metrics': {},
+        #     'errors': []
+        # }
 
-    # Evaluation using AI model
-    eval_result = evaluate(result['metrics'], detection['build_system'])
-    if not eval_result['success']:
-        return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
-    
-    # Save result to database
-    eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
-    return jsonify({'evaluation_id': eval_id, 'metrics': result['metrics'], 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+        # result['metrics'] = {
+        #     'response_time_seconds': 0.1,
+        #     'cpu_percent': 50.0,
+        #     'memory_usage': 100.0,
+        #     'memory_percent': 25.0
+        # }
+        # result = {'build_success': True, 'run_success': True, 'metrics': {'avg_response_time_ms': 0, 'min_response_time_ms': 16.01, 'max_response_time_ms': 612.07, 'p95_response_time_ms': 0, 'requests_per_second': 0, 'cpu_peak_percent': 30.03, 'cpu_average_percent': 8.45, 'memory_peak_mb': 211.12, 'memory_average_mb': 207.26, 'total_requests': 19, 'failed_requests': 19, 'failure_rate_percent': 100.0, 'concurrent_users': 10}, 'errors': []}
+        # print(result)
 
+        scores = result['metrics'].get('score', {})
+
+        # Evaluation using AI model
+        eval_result = evaluate(result['metrics'], detection['build_system'], scores)
+        print(eval_result)
+        if not eval_result['success']:
+            return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
+        
+        # Save result to database
+        eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
+        return jsonify({'evaluation_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+
+    finally:
+        shutil.rmtree(extract_path) # Clean up extracted files
 
 @app.route('/history')
 def history():

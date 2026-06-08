@@ -7,56 +7,87 @@ model_used = 'gemini-2.5-flash'
 def format_code_samples(samples): # select java files to send so that AI can help identify the causes behind the poor performance etc.
     pass
 
-def prompt(build_system, metrics):
-    return f"""
-    You are a software quality evaluator. Evaluate the following Java project against the ISO/IEC 25010 Performance Efficiency criteria
+def prompt(metrics, build_system, scores):
+    endpoint_summary = ""
+    for key, ep in metrics.get('per_endpoint', {}).items():
+        s = ep['scoring']
+        m = ep['metrics']
+        endpoint_summary += f"""
+{ep['method']} {ep['path']} ({ep['category_description']})
+  Score: {s['score']}/100 (Grade: {s['grade']})
+  Avg response time: {m['avg_response_time_ms']}ms
+  P95 response time: {m['p95_response_time_ms']}ms
+  Failure rate: {m['failure_rate_percent']}%
+"""
 
-    ISO/IEC 25010 Performance Efficiency has three sub-charateristics:
-    1. Time Behaviour: capability of a product to perform its specified function under specified conditions so that the response time and throughput rates meet the requirements
-    2. Rsource Utilisation: capability of a product to use no more than the specified amount of resources to perform its function under specified conditions
-    3. Capacity: capability of a product to meet requirements for the maximum limits of a product parameter
+    agg = metrics.get('aggregate', {})
 
-    Measured metrics:
-    - Response time: {metrics.get('response_time_seconds', 'N/A')} seconds
-    - CPU usage: {metrics.get('cpu_percent', 'N/A')}%
-    - Memory usage: {metrics.get('memory_usage', 'N/A')} MB
-    - Memory Percentage: {metrics.get('memory_percent', 'N/A')}%
-    - Build system: {build_system}
+    return f"""You are a software quality evaluator.
 
-    Provide your evaluation in the following JSON format exactly, with no additional text outside the JSON:
-    {{
+OVERALL SCORE: {scores['overall_score']}/100 (Grade: {scores['grade']})
+
+PER-ENDPOINT BREAKDOWN:
+{endpoint_summary}
+
+RESOURCE UTILISATION (under load of {agg.get('concurrent_users')} users):
+- Peak CPU: {agg.get('cpu_peak_percent')}%
+- Average CPU: {agg.get('cpu_average_percent')}%
+- Peak memory: {agg.get('memory_peak_mb')} MB
+- Average memory: {agg.get('memory_average_mb')} MB
+
+CAPACITY:
+- Total requests: {agg.get('total_requests')}
+- Failed requests: {agg.get('failed_requests')}
+- Overall failure rate: {agg.get('failure_rate_percent')}%
+- Requests per second: {agg.get('requests_per_second')}
+
+Each endpoint has been scored against thresholds appropriate for 
+its type — for example file operations are allowed higher response 
+times than simple reads. Reference specific endpoint scores and 
+response times in your findings.
+
+Respond in this JSON format:
+{{
     "overall_rating": "Poor/Fair/Good/Excellent",
-    "summary": "2-3 sentence overall summary",
+    "summary": "2-3 sentences referencing overall score of {scores['overall_score']}",
     "time_behaviour": {{
         "rating": "Poor/Fair/Good/Excellent",
-        "findings": ["finding 1", "finding 2"],
-        "recommendations": ["recommendation 1", "recommendation 2"]
+        "findings": ["finding referencing specific endpoints and times"],
+        "recommendations": ["specific recommendation"]
     }},
     "resource_utilisation": {{
         "rating": "Poor/Fair/Good/Excellent",
-        "findings": ["finding 1", "finding 2"],
-        "recommendations": ["recommendation 1", "recommendation 2"]
+        "findings": ["finding referencing CPU and memory numbers"],
+        "recommendations": ["specific recommendation"]
     }},
     "capacity": {{
         "rating": "Poor/Fair/Good/Excellent",
-        "findings": ["finding 1", "finding 2"],
-        "recommendations": ["recommendation 1", "recommendation 2"]
+        "findings": ["finding referencing failure rates"],
+        "recommendations": ["specific recommendation"]
     }},
-    "priority_issues": ["most urgent issue 1", "most urgent issue 2"]
+    "endpoint_findings": [
+        {{
+            "endpoint": "METHOD /path",
+            "score": 0,
+            "issue": "specific issue",
+            "recommendation": "specific fix"
+        }}
+    ],
+    "priority_issues": ["issue referencing specific endpoint and score"]
 }}"""
 
-def evaluate(metrics, build_system):
+def evaluate(metrics, build_system, scores):
     result = {
         'success': False,
         'evaluation': None,
         'raw_response': None,
-        'errors': []
+        'errors': [],
     }
 
     try:
         response = client.models.generate_content(
             model = model_used,
-            contents = {'text': prompt(build_system, metrics)}
+            contents = {'text': prompt(build_system, metrics, scores)}
         )
 
         clean_reponse = response.text.strip()
