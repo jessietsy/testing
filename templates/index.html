@@ -10,13 +10,14 @@
     <div class="container">
         <header>
             <h1>Software Quality Evaluator</h1>
-            <p>ISO/IEC 25010 — Performance Efficiency</p>
+            <p class="subtitle">ISO/IEC 25010 — Performance Efficiency</p>
         </header>
 
-        <section class="upload-section">
+        <!-- Upload Section -->
+        <section id="upload-section">
             <div class="upload-box" id="upload-box">
                 <input type="file" id="file-input" accept=".zip" hidden>
-                <i>📁</i>
+                <div class="upload-icon">📁</div>
                 <p>Drop your Java project zip here</p>
                 <button id="browse-btn">Browse files</button>
             </div>
@@ -24,95 +25,13 @@
             <button id="evaluate-btn" class="evaluate-btn hidden">Run Evaluation</button>
         </section>
 
-        <section id="loading" class="hidden">
+        <!-- Loading Section -->
+        <section id="loading-section" class="hidden">
             <div class="loader"></div>
             <p id="loading-message">Uploading project...</p>
         </section>
 
-        <section id="results" class="hidden">
-            <div class="overall-banner" id="overall-banner">
-                <h2 id="overall-rating"></h2>
-                <p id="overall-summary"></p>
-            </div>
-
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <span class="metric-label">Startup time</span>
-                    <span class="metric-value" id="startup-time">—</span>
-                </div>
-                <div class="metric-card">
-                    <span class="metric-label">Peak CPU</span>
-                    <span class="metric-value" id="peak-cpu">—</span>
-                </div>
-                <div class="metric-card">
-                    <span class="metric-label">Avg CPU</span>
-                    <span class="metric-value" id="avg-cpu">—</span>
-                </div>
-                <div class="metric-card">
-                    <span class="metric-label">Peak memory</span>
-                    <span class="metric-value" id="peak-memory">—</span>
-                </div>
-                <div class="metric-card">
-                    <span class="metric-label">Avg memory</span>
-                    <span class="metric-value" id="avg-memory">—</span>
-                </div>
-            </div>
-
-            <div class="characteristics">
-                <div class="characteristic-card" id="time-behaviour">
-                    <div class="characteristic-header">
-                        <h3>Time behaviour</h3>
-                        <span class="rating-badge" id="time-rating"></span>
-                    </div>
-                    <div class="findings">
-                        <h4>Findings</h4>
-                        <ul id="time-findings"></ul>
-                    </div>
-                    <div class="recommendations">
-                        <h4>Recommendations</h4>
-                        <ul id="time-recommendations"></ul>
-                    </div>
-                </div>
-
-                <div class="characteristic-card" id="resource-utilisation">
-                    <div class="characteristic-header">
-                        <h3>Resource utilisation</h3>
-                        <span class="rating-badge" id="resource-rating"></span>
-                    </div>
-                    <div class="findings">
-                        <h4>Findings</h4>
-                        <ul id="resource-findings"></ul>
-                    </div>
-                    <div class="recommendations">
-                        <h4>Recommendations</h4>
-                        <ul id="resource-recommendations"></ul>
-                    </div>
-                </div>
-
-                <div class="characteristic-card" id="capacity">
-                    <div class="characteristic-header">
-                        <h3>Capacity</h3>
-                        <span class="rating-badge" id="capacity-rating"></span>
-                    </div>
-                    <div class="findings">
-                        <h4>Findings</h4>
-                        <ul id="capacity-findings"></ul>
-                    </div>
-                    <div class="recommendations">
-                        <h4>Recommendations</h4>
-                        <ul id="capacity-recommendations"></ul>
-                    </div>
-                </div>
-            </div>
-
-            <div class="priority-issues" id="priority-issues-section">
-                <h3>Priority issues</h3>
-                <ul id="priority-issues"></ul>
-            </div>
-
-            <button id="reset-btn" class="reset-btn">Evaluate another project</button>
-        </section>
-
+        <!-- Error Section -->
         <section id="error-section" class="hidden">
             <div class="error-box">
                 <h3>Evaluation failed</h3>
@@ -120,36 +39,201 @@
             </div>
             <button id="error-reset-btn" class="reset-btn">Try again</button>
         </section>
+
+        <!-- Results Section -->
+        <section id="results-section" class="hidden">
+
+            <!-- Overall Score Banner -->
+            <div class="overall-banner" id="overall-banner">
+                <div class="banner-left">
+                    <span class="banner-label">Overall</span>
+                    <span class="banner-rating" id="overall-rating"></span>
+                </div>
+                <div class="banner-right">
+                    <div class="score-circle" id="overall-circle">
+                        <span class="score-number" id="overall-score"></span>
+                        <span class="score-max">/100</span>
+                    </div>
+                    <span class="grade-badge" id="overall-grade"></span>
+                </div>
+            </div>
+
+            <p class="summary-text" id="overall-summary"></p>
+
+            <!-- Sub-characteristic Scores -->
+            <h2 class="section-heading">ISO Sub-characteristics</h2>
+            <div class="sub-char-grid">
+                <div class="sub-char-card">
+                    <div class="sub-char-header">
+                        <span class="sub-char-name">Time Behaviour</span>
+                        <span class="grade-pill" id="time-grade"></span>
+                    </div>
+                    <div class="sub-char-score" id="time-score"></div>
+                    <div class="score-bar-track">
+                        <div class="score-bar" id="time-bar"></div>
+                    </div>
+                    <p class="sub-char-note">Response times across all endpoints</p>
+                </div>
+                <div class="sub-char-card">
+                    <div class="sub-char-header">
+                        <span class="sub-char-name">Resource Utilisation</span>
+                        <span class="grade-pill" id="resource-grade"></span>
+                    </div>
+                    <div class="sub-char-score" id="resource-score"></div>
+                    <div class="score-bar-track">
+                        <div class="score-bar" id="resource-bar"></div>
+                    </div>
+                    <p class="sub-char-note">CPU and memory under load</p>
+                </div>
+                <div class="sub-char-card">
+                    <div class="sub-char-header">
+                        <span class="sub-char-name">Capacity</span>
+                        <span class="grade-pill" id="capacity-grade"></span>
+                    </div>
+                    <div class="sub-char-score" id="capacity-score"></div>
+                    <div class="score-bar-track">
+                        <div class="score-bar" id="capacity-bar"></div>
+                    </div>
+                    <p class="sub-char-note">Failure rates under concurrent load</p>
+                </div>
+            </div>
+
+            <!-- Aggregate Metrics -->
+            <h2 class="section-heading">Load Test Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Total requests</span>
+                    <span class="metric-value" id="agg-total-requests">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Failed requests</span>
+                    <span class="metric-value" id="agg-failed-requests">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Failure rate</span>
+                    <span class="metric-value" id="agg-failure-rate">—</span>
+                </div>
+
+                <div class="metric-card">
+                    <span class="metric-label">Peak CPU</span>
+                    <span class="metric-value" id="agg-cpu-peak">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Avg CPU</span>
+                    <span class="metric-value" id="agg-cpu-avg">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Peak memory</span>
+                    <span class="metric-value" id="agg-mem-peak">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Avg memory</span>
+                    <span class="metric-value" id="agg-mem-avg">—</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Concurrent users</span>
+                    <span class="metric-value" id="agg-users">—</span>
+                </div>
+            </div>
+
+            <!-- Per Endpoint Table -->
+            <h2 class="section-heading">Endpoint Breakdown</h2>
+            <div class="table-wrapper">
+                <table id="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Category</th>
+                            <th>Score</th>
+                            <th>Grade</th>
+                            <th>Avg (ms)</th>
+                            <th>P95 (ms)</th>
+                            <th>Requests</th>
+                            <th>Failures</th>
+                            <th>Failure rate</th>
+                        </tr>
+                    </thead>
+                    <tbody id="endpoint-tbody"></tbody>
+                </table>
+            </div>
+
+            <!-- Per Endpoint Detail Cards -->
+            <h2 class="section-heading">Endpoint Detail</h2>
+            <div id="endpoint-cards"></div>
+
+            <!-- AI Evaluation -->
+            <h2 class="section-heading">AI Evaluation</h2>
+
+            <div class="eval-grid">
+                <div class="eval-card">
+                    <div class="eval-card-header">
+                        <h3>Time behaviour</h3>
+                        <span class="rating-badge" id="time-rating"></span>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Findings</p>
+                        <ul id="time-findings"></ul>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Recommendations</p>
+                        <ul id="time-recommendations"></ul>
+                    </div>
+                </div>
+
+                <div class="eval-card">
+                    <div class="eval-card-header">
+                        <h3>Resource utilisation</h3>
+                        <span class="rating-badge" id="resource-rating"></span>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Findings</p>
+                        <ul id="resource-findings"></ul>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Recommendations</p>
+                        <ul id="resource-recommendations"></ul>
+                    </div>
+                </div>
+
+                <div class="eval-card">
+                    <div class="eval-card-header">
+                        <h3>Capacity</h3>
+                        <span class="rating-badge" id="capacity-rating"></span>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Findings</p>
+                        <ul id="capacity-findings"></ul>
+                    </div>
+                    <div class="findings-block">
+                        <p class="block-label">Recommendations</p>
+                        <ul id="capacity-recommendations"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Endpoint Findings from AI -->
+            <div id="endpoint-findings-section" class="hidden">
+                <h2 class="section-heading">Endpoint findings</h2>
+                <div id="endpoint-findings-list"></div>
+            </div>
+
+            <!-- Priority Issues -->
+            <div class="priority-box" id="priority-box">
+                <h3>Priority issues</h3>
+                <ul id="priority-issues"></ul>
+            </div>
+
+            <!-- Run Errors -->
+            <div id="run-errors-box" class="hidden">
+                <h3>Run notes</h3>
+                <ul id="run-errors-list"></ul>
+            </div>
+
+            <button id="reset-btn" class="reset-btn">Evaluate another project</button>
+        </section>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-<!-- <!DOCTYPE html>
-<html>
-<head>
-    <title>Software Quality Evaluation</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">    
-</head>
-<body>
-    <h1>Software Quality Evaluation</h1>
-    <p>ISO/IEC 25010 - Performance Efficiency</p>
-    <form action="/evaluate" method="post" enctype="multipart/form-data">
-        <label>Choose ZIP file: <input type='file' id="'file-input" name ='file'></label><br><br>
-        <button id="evaluate" type='submit'>Start Evaluation</button>
-
-    </form>
-
-    <div id="status"></div>
-    <div id="results"></div>
-
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
-</body>
-</html> -->

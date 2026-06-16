@@ -15,7 +15,7 @@ def generate_locust(endpoints, output_path):
     @task
     def endpoint_{i}(self):
         with self.client.{ep['method'].lower()}('{path}', catch_response=True) as response:
-            if reponse.status_code == 0:
+            if response.status_code == 0:
                 response.failure('No response')
             elif response.status_code >= 400:
                 response.failure(f'Status code {{response.status_code}}')
@@ -52,7 +52,7 @@ def wait_for_app(host, port, timeout=120):
     return False
 
 
-def get_endpoints(project_root, container, host, port):
+def get_endpoints(project_root, host, port):
     """
     Try dynamic discovery first, fall back to static analysis
     """
@@ -154,44 +154,77 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
         # parse locust JSON output
         if proc.stdout:
             try:
-                per_endpoint_metrics, aggregate = parse_locust_stats(
+                per_endpoint_metrics, aggregate_locust = parse_locust_stats(
                     proc.stdout,
                     endpoints
                 )
-
-                scores = score_all_endpoints(per_endpoint_metrics)
+                print(f'per_endpoint_metrics: {per_endpoint_metrics}')
+                print()
+                print(f'aggregate_locust: {aggregate_locust}')
+                print()
+                print(f'docker stats: {docker_stats}')
+                print()
+                # scores = score_all_endpoints(per_endpoint_metrics, docker_stats)
 
                 # Aggregate resource metrics from Docker stats
                 cpu_samples = [s['cpu_percent'] for s in docker_stats]
                 memory_samples = [s['memory_mb'] for s in docker_stats]
 
+                # Aggregate all metrics (Locust and Docker) into a single dictionary for scoring and evaluation
+                # aggregate_all = {
+                #         'total_requests': aggregate_locust.get('num_requests', 0),
+                #         'failed_requests': aggregate_locust.get('num_failures', 0),
+                #         'failure_rate_percent': round(
+                #             aggregate_locust.get('num_failures', 0) /
+                #             aggregate_locust.get('num_requests', 1) * 100, 2
+                #         ),
+                #         'requests_per_second': round(
+                #             aggregate_locust.get('requests_per_sec', 0) or
+                #             aggregate_locust.get('current_rps', 0), 2
+                #         ),
+                #         'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
+                #         'cpu_average_percent': round(
+                #             sum(cpu_samples) / len(cpu_samples), 2
+                #         ) if cpu_samples else 0,
+                #         'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
+                #         'memory_average_mb': round(
+                #             sum(memory_samples) / len(memory_samples), 2
+                #         ) if memory_samples else 0,
+                #         'concurrent_users': users
+                # }
+
+                aggregate_all = get_aggregate(per_endpoint_metrics, docker_stats, users)
+                scores = score_all_endpoints(per_endpoint_metrics, aggregate_all)
+            
+
                 result['metrics'] = {
                     'per_endpoint': per_endpoint_metrics,
-                    'aggregate': {
-                        'total_requests': aggregate.get('num_requests', 0),
-                        'failed_requests': aggregate.get('num_failures', 0),
-                        'failure_rate_percent': round(
-                            aggregate.get('num_failures', 0) /
-                            aggregate.get('num_requests', 1) * 100, 2
-                        ),
-                        'requests_per_second': round(
-                            aggregate.get('requests_per_sec', 0) or
-                            aggregate.get('current_rps', 0), 2
-                        ),
-                        'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
-                        'cpu_average_percent': round(
-                            sum(cpu_samples) / len(cpu_samples), 2
-                        ) if cpu_samples else 0,
-                        'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
-                        'memory_average_mb': round(
-                            sum(memory_samples) / len(memory_samples), 2
-                        ) if memory_samples else 0,
-                        'concurrent_users': users
-                    },
+                    'aggregate': aggregate_all,
+                    # 'aggregate': {
+                    #     'total_requests': aggregate.get('num_requests', 0),
+                    #     'failed_requests': aggregate.get('num_failures', 0),
+                    #     'failure_rate_percent': round(
+                    #         aggregate.get('num_failures', 0) /
+                    #         aggregate.get('num_requests', 1) * 100, 2
+                    #     ),
+                    #     'requests_per_second': round(
+                    #         aggregate.get('requests_per_sec', 0) or
+                    #         aggregate.get('current_rps', 0), 2
+                    #     ),
+                    #     'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
+                    #     'cpu_average_percent': round(
+                    #         sum(cpu_samples) / len(cpu_samples), 2
+                    #     ) if cpu_samples else 0,
+                    #     'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
+                    #     'memory_average_mb': round(
+                    #         sum(memory_samples) / len(memory_samples), 2
+                    #     ) if memory_samples else 0,
+                    #     'concurrent_users': users
+                    # },
                     'scores': scores
                 }
 
-                result['run_success'] = True
+                result['success'] = True
 
             except Exception as e:
                 result['errors'].append(f'Stats parsing failed: {str(e)}')
@@ -220,11 +253,13 @@ def parse_locust_stats(locust_output, endpoints):
     aggregate = {}
 
     for stat in stats_list:
+        method = stat.get('method', '').upper()
         name = stat.get('name', '')
+        key = f"{method} {name}"
         if name == 'Aggregated':
             aggregate = stat
         else:
-            endpoint_stats[name] = stat
+            endpoint_stats[key] = stat
 
     # Match stats back to our endpoints
     per_endpoint_metrics = {}
@@ -237,6 +272,10 @@ def parse_locust_stats(locust_output, endpoints):
         locust_key = f"{method} {path}"
         stat = endpoint_stats.get(locust_key, {})
 
+        if not stat:
+            print(f'No Locust data found for {locust_key}')
+            continue
+
         per_endpoint_metrics[locust_key] = {
             'method': method,
             'path': ep['path'],
@@ -247,7 +286,7 @@ def parse_locust_stats(locust_output, endpoints):
             ).get('description', ''),
             'metrics': {
                 'avg_response_time_ms': round(
-                    stat.get('avg_response_time', 0), 2
+                    (stat.get('total_response_time', 0)/stat.get('num_requests', 0)) if stat.get('num_requests', 0) > 0 else 0, 2
                 ),
                 'min_response_time_ms': round(
                     stat.get('min_response_time', 0), 2
@@ -256,22 +295,103 @@ def parse_locust_stats(locust_output, endpoints):
                     stat.get('max_response_time', 0), 2
                 ),
                 'p95_response_time_ms': round(
-                    stat.get('response_time_percentile_0.95', 0) or
-                    stat.get('response_time_percentile_95', 0), 2
+                    calculate_p95(stat.get('response_times', {})), 2
                 ),
-                'requests_per_second': round(
-                    stat.get('requests_per_sec', 0) or
-                    stat.get('current_rps', 0), 2
+
+                'requests_per_second': calculate_avg_rps(stat.get('num_reqs_per_sec', {})
                 ),
+
                 'total_requests': stat.get('num_requests', 0),
                 'failed_requests': stat.get('num_failures', 0),
                 'failure_rate_percent': round(
-                    stat.get('num_failures', 0) /
-                    stat.get('num_requests', 1) * 100, 2
-                ) if stat.get('num_requests', 0) > 0 else 0
+                    (stat.get('num_failures', 0) /
+                    stat.get('num_requests', 0))*100 if stat.get('num_requests', 0) > 0 else 0, 2
+                ) 
             }
         }
 
     return per_endpoint_metrics, aggregate
 
+def calculate_p95(response_times): # response times dictionary from locust stats
+    if not response_times:
+        return 0
+    
+    all_times = []
+    for time_str, count in response_times.items():
+        all_times.extend([int(time_str)] * count)
+    
+    all_times.sort()
+    if not all_times:
+        return 0
+    
+    index = int(0.95 * len(all_times)) - 1
+    return all_times[min(index, len(all_times) - 1)] 
+                 
+def calculate_avg_rps(num_rps):
+    if not num_rps:
+        return 0
+    values = list(num_rps.values())
+    return round(sum(values) / len(values), 2)
+
+def get_aggregate(per_endpoint_metrics, docker_stats, users):
+    total_requests = sum(
+        ep['metrics']['total_requests']
+        for ep in per_endpoint_metrics.values()
+    )
+    total_failures = sum(
+        ep['metrics']['failed_requests']
+        for ep in per_endpoint_metrics.values()
+    )
+
+    cpu_samples = [s['cpu_percent'] for s in docker_stats]
+    memory_samples = [s['memory_mb'] for s in docker_stats]
+
+    return {
+        'total_requests': total_requests,
+        'failed_requests': total_failures,
+        'failure_rate_percent': round(
+            total_failures / total_requests * 100, 2
+        ) if total_requests > 0 else 0,
+        'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
+        'cpu_average_percent': round(
+            sum(cpu_samples) / len(cpu_samples), 2
+        ) if cpu_samples else 0,
+        'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
+        'memory_average_mb': round(
+            sum(memory_samples) / len(memory_samples), 2
+        ) if memory_samples else 0,
+        'concurrent_users': users
+    }
+
+
 # locust_path = generate_locust([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}], 'uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend')
+
+def calculate_p95(response_times_dict):
+    """
+    Calculate p95 from Locust's response_times dict
+    Keys are rounded response times, values are counts
+    """
+    if not response_times_dict:
+        return 0
+
+    # Build sorted list of all response times
+    all_times = []
+    for time_str, count in response_times_dict.items():
+        all_times.extend([int(time_str)] * count)
+
+    all_times.sort()
+
+    if not all_times:
+        return 0
+
+    p95_index = int(len(all_times) * 0.95)
+    return all_times[min(p95_index, len(all_times) - 1)]
+
+def calculate_avg_rps(num_reqs_per_sec):
+    """Calculate average requests per second from Locust's per-second dict"""
+    if not num_reqs_per_sec:
+        return 0
+    values = list(num_reqs_per_sec.values())
+    return round(sum(values) / len(values), 2)
+
+

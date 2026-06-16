@@ -1,4 +1,4 @@
-import docker, os, time, re
+import docker, os, re
 from locust_runner import run_test, get_endpoints
 
 client = docker.from_env()
@@ -88,7 +88,7 @@ def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60
             detach=True, 
             mem_limit='512m', # resource limits
             nano_cpus=1_000_000_000, # equivalent to 1 CPU
-            network_disabled=True, 
+            network_disabled=False, # enable network for load testing
             ports={f'{port}/tcp': port}, # expose app port for testing (port mapping allows us to access the app running inside the container from our host machine for load testing)
             remove=False) # returns container object
     
@@ -180,3 +180,5 @@ def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60
 
 
 # print(detect_java_version('uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend'))
+# result = run_and_measure('uploads/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend', 'maven', [{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}])
+# print(result)

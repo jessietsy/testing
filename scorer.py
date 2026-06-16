@@ -99,7 +99,7 @@ def score_endpoint(endpoint_data):
         'metric_scores': metric_scores
     }
 
-def score_resource_utilisation(docker_metrics):
+def score_resource_utilisation(aggregate_all):
     """Score CPU and memory from Docker stats — application wide not per endpoint"""
     cpu_thresholds = {
         'excellent': 30,
@@ -116,18 +116,18 @@ def score_resource_utilisation(docker_metrics):
 
     cpu_score = score_metric_with_thresholds(
         'cpu_average_percent',
-        docker_metrics.get('cpu_average_percent', 0),
+        aggregate_all.get('cpu_average_percent', 0),
         cpu_thresholds
     )
     memory_score = score_metric_with_thresholds(
         'memory_average_mb',
-        docker_metrics.get('memory_average_mb', 0),
+        aggregate_all.get('memory_average_mb', 0),
         memory_thresholds
     )
 
     return round(cpu_score * 0.5 + memory_score * 0.5, 1)
 
-def score_all_endpoints(per_endpoint_metrics, docker_metrics):
+def score_all_endpoints(per_endpoint_metrics, aggregate_all):
     """
     Score all endpoints individually then roll up into
     ISO sub-characteristic scores and overall score
@@ -152,20 +152,24 @@ def score_all_endpoints(per_endpoint_metrics, docker_metrics):
         }
 
     # Time behaviour — average of avg_response_time scores across endpoints
+    #print(endpoint_scores) # debug - successful
     time_scores = [
         ep['scoring']['metric_scores'].get('avg_response_time_ms', 0)
         for ep in endpoint_scores.values()
         if ep['metrics'].get('avg_response_time_ms', 0) > 0
     ]
+    #print(time_scores)
 
     # Capacity — average of failure_rate scores across endpoints
     capacity_scores = [
         ep['scoring']['metric_scores'].get('failure_rate_percent', 0)
         for ep in endpoint_scores.values()
     ]
+    #print(capacity_scores)
 
     # Resource utilisation — application wide from Docker
-    resource_score = score_resource_utilisation(docker_metrics)
+    resource_score = score_resource_utilisation(aggregate_all)
+
 
     time_behaviour_score = round(
         sum(time_scores) / len(time_scores), 1
