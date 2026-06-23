@@ -3,13 +3,14 @@ from locust_runner import run_test, get_endpoints
 
 client = docker.from_env()
 
-def detect_java_version(project_root): # detect java version to use appropriate base image for Dockerfile
+def detect_java_version(project_root): 
+    """Detect Java version to use appropriate base image for Dockerfile"""
     pom_path = os.path.join(project_root, 'pom.xml')
     if not os.path.exists(pom_path): 
         return '17' # default to 17 if no pom.xml found
 
-    with open(pom_path, 'r', errors='ignore') as f:
-        content = f.read()
+    with open(pom_path, 'r', errors='ignore') as file:
+        content = file.read()
 
     # Look for java.version in pom.xml (common convention) 
     match = re.search(r'<java\.version>(\d+)</java\.version>', content)
@@ -23,7 +24,42 @@ def detect_java_version(project_root): # detect java version to use appropriate 
     
     return '17' # default if no version found
 
+def needs_database(project_root):
+    """Check if project requires an external database"""
+    pom_path = os.path.join(project_root, 'pom.xml')
+    if not os.path.exists(pom_path):
+        return False, None
+    
+    with open(pom_path, 'r', errors='ignore') as file:
+        content = file.read().lower()
 
+    if 'mysql' in content:
+        return True, 'mysql'
+    elif 'postgresql' in content or 'postgres' in content:
+        return True, 'postgresql'
+    elif 'h2' in content:
+        return False, 'h2' # h2 runs in memotry so no external database is needed
+    
+    return False, None
+
+def write_docker_compose(project_root, build_system, java_version, db_type, port):
+    """Write docker-compose.yml file for projects needing databse"""
+    if db_type == 'mysql':
+        db_service = """
+db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+"""
 def dockerfile(build_system, project_root):
     java_version = detect_java_version(project_root)
     if build_system == 'maven':
@@ -81,7 +117,6 @@ def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60
     
     try: 
         # Run container with port exposed (for locust)
-        # start_time = time.time()
         print('Running container...')
         container = client.containers.run(
             image_tag, 
@@ -115,49 +150,6 @@ def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60
         result['metrics'] = load_result['metrics']
         result['errors'].extend(load_result['errors'])
         result['run_success'] = load_result['success']
-
-
-
-        # # Wait for container to finish or timeout
-        # try:
-        #     container.wait(timeout=timeout) # avoid hanging indefinitely
-        # except Exception:
-        #     result['errors'].append(f'Container timed out after {timeout} seconds')
-        
-
-
-        # end_time = time.time()
-
-        # Get Docker metrics
-        # stats = container.stats(stream=False)
-
-        # cpu_stats = stats.get('cpu_stats', {})
-        # precpu_stats = stats.get('precpu_stats', {})
-
-        # cpu_delta = (
-        #     cpu_stats.get('cpu_usage', {}).get('total_usage', 0) -
-        #     precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
-        # )
-
-        # system_cpu = cpu_stats.get('system_cpu_usage')
-        # presystem_cpu = precpu_stats.get('system_cpu_usage')
-
-        # system_delta = system_cpu - presystem_cpu if system_cpu and presystem_cpu else 0
-        # cpu_percent = (cpu_delta / system_delta) * 100 if system_delta > 0 else 0
-
-        # memory_stats = stats.get('memory_stats', {})
-        # memory_usage = memory_stats.get('usage', 0)
-        # memory_limit = memory_stats.get('limit', 1)
-        # memory_percent = (memory_usage / memory_limit) * 100
-
-        # result['metrics'] = {
-        #     'response_time_seconds': round(end_time - start_time, 2),
-        #     'cpu_percent': round(cpu_percent, 2),
-        #     'memory_usage_mb': round(memory_usage / (1024 * 1024), 2),
-        #     'memory_percent': round(memory_percent, 2)
-        # }
-        # result['run_success'] = True
-
 
 
     except Exception as e:
