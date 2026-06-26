@@ -11,20 +11,22 @@ def create_tables():
                 submitted_at TEXT NOT NULL,
                 build_system,
                 metrics TEXT,
+                scores TEXT,
                 evaluation TEXT,
-                overall_rating TEXT,
+                overall_score TEXT,
+                grade TEXT,
                 errors TEXT
                 )
                  """)
     conn.commit()
     conn.close()
 
-def insert(filename, build_system, metrics, evaluation, overall_rating, errors):
+def insert(filename, build_system, metrics, scores, evaluation, errors):
     conn = sqlite3.connect('evaluation.db')
     cursor = conn.cursor()
-    cursor.execute("""INSERT OR IGNORE INTO evaluations (filename, submitted_at, build_system, metrics, evaluation, overall_rating, errors)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                 """, (filename, datetime.datetime.now(), build_system, json.dumps(metrics), json.dumps(evaluation), evaluation.get(overall_rating) if evaluation else None, json.dumps(errors)))
+    cursor.execute("""INSERT OR IGNORE INTO evaluations (filename, submitted_at, build_system, metrics, scores, evaluation, overall_score, grade, errors)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 """, (filename, datetime.datetime.now(), build_system, json.dumps(metrics), json.dump(scores), json.dumps(evaluation), scores.get('overall_score'), scores.get('grade'), json.dumps(errors)))
     conn.commit()
     evaluation_id = cursor.lastrowid
     conn.close()

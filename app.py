@@ -82,11 +82,11 @@ def evaluator():
             return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
         
         # Save result to database
-        # eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
-        # return jsonify({'evaluation_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+        eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
+        
         print()
         print({'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
-        return jsonify({'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+        return jsonify({'eval_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
 
     finally:
         shutil.rmtree(extract_path) # Clean up extracted files
