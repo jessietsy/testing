@@ -8,6 +8,7 @@ def format_code_samples(samples): # select java files to send so that AI can hel
     pass
 
 def prompt(metrics, build_system, scores):
+    """Build prompt for LLM"""
     endpoint_summary = ""
     for key, ep in metrics.get('per_endpoint', {}).items():
         s = scores['endpoint_scores'][key]['scoring']
@@ -77,6 +78,7 @@ Respond in this JSON format:
 }}"""
 
 def evaluate(metrics, build_system, scores):
+    """Obtain evaluation from LLM model, parse and validate results"""
     result = {
         'success': False,
         'evaluation': None,

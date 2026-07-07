@@ -49,6 +49,7 @@ def detect_endpoints(project_root):
     return unique_endpoints
 
 def collect_java_files(project_root):
+    """Detect java files from extracted project"""
     java_files = []
     for root, dirs, files in os.walk(project_root):
         dirs[:] = [d for d in dirs if d not in SKIP_FOLDERS]

@@ -2,6 +2,7 @@ import os
 JAVA_JUNK = ['target', '.git', 'build', '.gradle', '.idea', '__MACOSX']
 
 def detect_java_files(extract_path):
+    """Identify java files from extracted project"""
     result = {
         'build_system': None,
         'java_files': [],
