@@ -48,9 +48,9 @@ def evaluator():
         port = detect_port(detection['project_root'])
         static_endpoints = detect_endpoints(detection['project_root'])
         print(f'Detected port: {port}')
-        print(f'Statically detected endpoints: {static_endpoints}')
+        print(f'[For Debugging] Statically detected endpoints: {static_endpoints}')
 
-        result = run_and_measure(detection['project_root'], detection['build_system'], static_endpoints, port=port) 
+        result = run_and_measure(detection['project_root'], detection['build_system'], port=port) 
         print(result)
         if not result['build_success']:
             return jsonify({'errors': result['errors']}), 400

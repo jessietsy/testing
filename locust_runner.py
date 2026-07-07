@@ -65,10 +65,12 @@ def get_endpoints(project_root, host, port):
     
     if actuator_endpoints:
         print(f'Actuator discovery found {len(actuator_endpoints)} endpoints')
+        print(f'Dynamically detected endpoints: {actuator_endpoints}')
         return actuator_endpoints
     
     if static_endpoints:
         print('Using static analysis endpoints')
+        print(f'Statically detected endpoints: {static_endpoints}')
         return static_endpoints
 
     return []

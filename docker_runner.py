@@ -209,7 +209,7 @@ def stop_compose(project_root):
         print(f'Error stopping compose: {e}')
 
 
-def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60): # static endpoints
+def run_and_measure(project_root, build_system, port=8080, timeout=60): # static endpoints
     """Run application and obtain metrics using Locust"""
     result = {
         'build_success': False,
