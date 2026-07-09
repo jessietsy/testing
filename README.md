@@ -27,3 +27,69 @@ This tool allows developers to upload a Java project zip file and receive a qual
 ## Installation
 1.  Clone the repository
 
+```bash
+git clone https://github.com/jessietsy/testing.git
+cd testing
+```
+
+2. Create virtual environment
+
+```bash
+python -m venv venv
+
+# Mac/Linux
+source venv/bin/activate
+
+# Windows
+venv\Scripts\activate
+```
+
+3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+4. Set API key 
+
+This tool uses the Google Gemini API for AI Evaluation. Get a key at https://aistudio.google.com/api-keys then set it as an environmental variable
+
+```bash
+# Mac/Linux
+export GEMINI_API_KEY='your-key-here'
+
+# Windows
+set GEMINI_API_KEY=your-key-here
+```
+
+5. Make sure Docker Desktop is running
+
+Open Docker Desktop and wait for it to fully start before running this tool
+
+---
+
+## Running the tool
+
+```bash
+python app.py
+```
+
+Then open your browser and visit:
+http://localhost:5000
+
+---
+
+## What to upload 
+
+The tool currently supports **Java Spring Boot projects** built with **Maven** or **Gradle**. The project should 
+- Expose HTTP endpoints via Spring MVC annotation (`@GetMapping`, `@PostMapping` etc)
+- Upload project as zip file
+
+---
+
+
+## Future development
+- Additional language support
+- Additional ISO/IEC 25010 characteristics
+- Scenario-based testing - integrating with functional suitablity output to evaluate performance per user flow
+- Data seeding - automatically inserting test data into database before load testing so all endpoint types are exercised meaningfully
