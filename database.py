@@ -26,7 +26,7 @@ def insert(filename, build_system, metrics, scores, evaluation, errors):
     cursor = conn.cursor()
     cursor.execute("""INSERT OR IGNORE INTO evaluations (filename, submitted_at, build_system, metrics, scores, evaluation, overall_score, grade, errors)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 """, (filename, datetime.datetime.now(), build_system, json.dumps(metrics), json.dump(scores), json.dumps(evaluation), scores.get('overall_score'), scores.get('grade'), json.dumps(errors)))
+                 """, (filename, datetime.datetime.now(), build_system, json.dumps(metrics), json.dumps(scores), json.dumps(evaluation), scores.get('overall_score'), scores.get('grade'), json.dumps(errors)))
     conn.commit()
     evaluation_id = cursor.lastrowid
     conn.close()
