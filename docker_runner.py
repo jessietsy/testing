@@ -290,6 +290,11 @@ def run_and_measure(project_root, build_system, port=8080, timeout=60): # static
                 nano_cpus=1_000_000_000, # equivalent to 1 CPU
                 network_disabled=False, # enable network for load testing
                 ports={f'{port}/tcp': port}, # expose app port for testing (port mapping allows us to access the app running inside the container from our host machine for load testing)
+                environment={
+                'SPRING_SQL_INIT_MODE': 'always',
+                'SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION': 'true',
+                'SPRING_JPA_HIBERNATE_DDL_AUTO': 'create'
+            }, # for h2 database initialisation (if used)
                 remove=False) # returns container object
         
             print('Container started...')
