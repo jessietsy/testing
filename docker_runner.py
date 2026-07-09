@@ -51,8 +51,7 @@ FROM maven:3.9-eclipse-temurin-{java_version}
 WORKDIR /app
 COPY . .
 RUN mvn package -DskipTests -q
-CMD ["sh", "-c", "java -jar target/*.jar"]
-"""
+CMD ["sh", "-c", "java -jar $(ls target/*.jar | grep -v original | head -1)"]"""
     
     elif build_system == 'gradle':
         return f"""\
