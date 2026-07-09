@@ -1,4 +1,5 @@
 import os
+SKIP_FOLDERS = []
 def detect_application_category(project_root):
     """
     Scans pom.xml and Java files to determine application category

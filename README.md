@@ -2,7 +2,7 @@
 > Automated ISO/IEC 25010 Performance Efficiency evaluator for Java Spring Boot applications
 
 ## Overview
-This tool allows developers to upload a Java project zip file and receive a quality report evaluated against the standard and definitions stated in ISO/IEC 25010. This tool automatically builds the project, runs it in an isolated environment, performs load testing, and uses AI to produce findings and recommendations.
+This tool allows developers to upload a Java project zip file and receive a quality report evaluated against the standard and definitions of Performance Efficiency stated in ISO/IEC 25010. This tool automatically builds the project, runs it in an isolated environment, performs load testing, and uses AI to produce findings and recommendations.
 
 ---
 
@@ -18,9 +18,12 @@ This tool allows developers to upload a Java project zip file and receive a qual
 ---
 
 ## Requirements
-
+- Docker Desktop (Running)
+- Python 3.10+ (Tested on Python 3.10)
+- Git
 
 ---
 
 ## Installation
+1.  Clone the repository
 
