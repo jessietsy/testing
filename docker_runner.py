@@ -279,6 +279,16 @@ def run_and_measure(project_root, build_system, port=8080, timeout=60): # static
         except docker.errors.BuildError as e:
             result['errors'].append(f'Build error: {str(e)}')
             return result
+
+        if  db_type =='h2':
+            environment = {
+            'SPRING_SQL_INIT_MODE': 'always',
+            'SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION': 'true',
+            'SPRING_JPA_HIBERNATE_DDL_AUTO': 'create'
+        }
+        
+        else:
+            environment = {}
         
         try: 
             # Run container with port exposed (for locust)
@@ -290,11 +300,7 @@ def run_and_measure(project_root, build_system, port=8080, timeout=60): # static
                 nano_cpus=1_000_000_000, # equivalent to 1 CPU
                 network_disabled=False, # enable network for load testing
                 ports={f'{port}/tcp': port}, # expose app port for testing (port mapping allows us to access the app running inside the container from our host machine for load testing)
-                environment={
-                'SPRING_SQL_INIT_MODE': 'always',
-                'SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION': 'true',
-                'SPRING_JPA_HIBERNATE_DDL_AUTO': 'create'
-            }, # for h2 database initialisation (if used)
+                environment=environment if environment else None, # for h2 database initialisation (if used)
                 remove=False) # returns container object
         
             print('Container started...')
@@ -344,3 +350,4 @@ def run_and_measure(project_root, build_system, port=8080, timeout=60): # static
 # print(detect_java_version('uploads/project/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend'))
 # result = run_and_measure('uploads/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend', 'maven', [{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}])
 # print(result)
+# print(run_and_measure('uploads/SpringBoot-Reactjs-Ecommerce-main copy 2/Ecommerce-Backend', 'maven'))
