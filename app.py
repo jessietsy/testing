@@ -4,7 +4,8 @@ from docker_runner import run_and_measure
 from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
 from endpoint_detector import detect_endpoints, detect_port
-import os, zipfile, shutil
+from seed_config import suggest_seed_config
+import os, zipfile, shutil, uuid
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -16,13 +17,14 @@ os.makedirs(UPLOAD_FOLDER, exist_ok = True)
 def index():
     return render_template('index.html')
 
-@app.route('/evaluate', methods=['POST'])
-def evaluator():
-    create_tables() # Initialise database and tables if they don't exist yet
+@app.route('/detect', methods=['POST'])
+def detect():
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
-    
+        
     file = request.files['file']
+    upload_id = str(uuid.uuid4())
+    print(upload_id)
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
 
@@ -32,25 +34,80 @@ def evaluator():
     extract_path = os.path.join(UPLOAD_FOLDER, 'project')
     os.makedirs(extract_path, exist_ok = True)
 
-    try: 
-        with zipfile.ZipFile(file, 'r') as myzip:
-            myzip.extractall(extract_path)
+     
+    with zipfile.ZipFile(file, 'r') as myzip:
+        myzip.extractall(extract_path)
+
+    detection = detect_java_files(extract_path)
+    print(detection)
+
+    if detection['errors']:
+        return jsonify({'errors': detection['errors']}), 400
+    
+    # Detect endpoints and run load test
+    port = detect_port(detection['project_root'])
+    static_endpoints = detect_endpoints(detection['project_root'])
+    print(f'Detected port: {port}')
+    print(f'[For Debugging] Statically detected endpoints: {static_endpoints}')
+
+
+    # Check if there are write endpoints
+    write_methods = {'POST', 'PUT', 'DELETE', 'PATCH'}
+    has_writes = any(endpoint['method'].upper() in write_methods for endpoint in static_endpoints)
+    seed_suggestion = None
+    if has_writes:
+        seed_suggestion = suggest_seed_config(static_endpoints, detection['project_root'])  
+    
+    return jsonify({'upload_id': upload_id, 'file': file.filename, 'extract_path': extract_path, 'endpoints': static_endpoints, 'port': port, 'has_writes': has_writes, 'seed_suggestion': seed_suggestion})
 
 
 
+@app.route('/evaluate', methods=['POST'])
+def evaluator():
+    create_tables() # Initialise database and tables if they don't exist yet
+    # if 'file' not in request.files:
+    #     return jsonify({'error': 'No file uploaded'}), 400
+    
+    # file = request.files['file']
+    # if file.filename == '':
+    #     return jsonify({'error': 'No file selected'}), 400
+
+    # if not file.filename.endswith('.zip'):
+    #     return jsonify({'error': 'Invalid file type. File must be a zip'}), 400
+    
+    # extract_path = os.path.join(UPLOAD_FOLDER, 'project')
+    # os.makedirs(extract_path, exist_ok = True)
+
+    # try: 
+    #     with zipfile.ZipFile(file, 'r') as myzip:
+    #         myzip.extractall(extract_path)
+
+
+
+    #     detection = detect_java_files(extract_path)
+    #     print(detection)
+
+    #     if detection['errors']:
+    #         return jsonify({'errors': detection['errors']}), 400
+        
+    #     # Detect endpoints and run load test
+    #     port = detect_port(detection['project_root'])
+    #     static_endpoints = detect_endpoints(detection['project_root'])
+    #     print(f'Detected port: {port}')
+    #     print(f'[For Debugging] Statically detected endpoints: {static_endpoints}')
+
+    data = request.json
+    print(data)
+    upload_id = data.get('upload_id')
+    static_endpoints = data.get('endpoints')
+    port = data.get('port')
+    seed_config = data.get('seed_config')  
+    extract_path = os.path.join(UPLOAD_FOLDER, 'project')  # Assuming the project is extracted to this path
+
+    try:
         detection = detect_java_files(extract_path)
         print(detection)
-
-        if detection['errors']:
-            return jsonify({'errors': detection['errors']}), 400
-        
-        # Detect endpoints and run load test
-        port = detect_port(detection['project_root'])
-        static_endpoints = detect_endpoints(detection['project_root'])
-        print(f'Detected port: {port}')
-        print(f'[For Debugging] Statically detected endpoints: {static_endpoints}')
-
-        result = run_and_measure(detection['project_root'], detection['build_system'], port=port) 
+        result = run_and_measure(detection['project_root'], detection['build_system'], seed_config=seed_config, port=port) 
         print(result)
         if not result['build_success']:
             return jsonify({'errors': result['errors']}), 400
@@ -82,14 +139,19 @@ def evaluator():
             return jsonify({'error': 'Evaluation failed', 'details': eval_result['errors']}), 400
         
         # Save result to database
-        eval_id = insert(file.filename, detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
+        eval_id = insert(detection['project_root'], detection['build_system'], result['metrics'], eval_result['evaluation'], eval_result['evaluation'].get('overall_rating'), result['errors'])
         
         print()
         print({'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
         return jsonify({'eval_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
 
     finally:
-        shutil.rmtree(extract_path) # Clean up extracted files
+        shutil.rmtree(extract_path, ignore_errors=True) # Clean up extracted files
+
+# @app.route('/detect', methods=['POST'])
+# def detect():
+#     file = request.files['file']
+#     upload_id
 
 @app.route('/history')
 def history():

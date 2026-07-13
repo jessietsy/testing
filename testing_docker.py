@@ -40,7 +40,7 @@ CMD ["sh", "-c", "java -jar target/*.jar"]
 FROM gradle:8.5-jdk{java_version}
 WORKDIR /app
 COPY . .
-RUN gradle build -x test -q
+RUN gradle build -x test -info
 CMD ["sh", "-c", "java -jar build/libs/*.jar"]
 """
     else:
@@ -182,5 +182,4 @@ def run_and_measure(project_root, build_system, endpoints, port=8080, timeout=60
     
 
 
-result = run_and_measure('uploads/SpringBoot-Reactjs-Ecommerce-main/Ecommerce-Backend', 'maven', [{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}])
-print(result)
+result = dockerfile('gradle', 'uploads/project/spring-boot-gradle-mvc-master')

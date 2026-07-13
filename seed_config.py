@@ -61,7 +61,7 @@ Respond ONLY with valid JSON in this exact format, no other text.
             model = model_used,
             contents = {'text': prompt}
         )
-        print(response.text)  # Print the raw response for debugging
+
         clean_response = response.text.strip()
         
         if clean_response.startswith('```'):
@@ -76,7 +76,7 @@ Respond ONLY with valid JSON in this exact format, no other text.
         print(f"Error generating seed config suggestion: {e}")
         return None
 
-print(suggest_seed_config([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}] , 'uploads/SpringBoot-Reactjs-Ecommerce-main copy 4/Ecommerce-Backend'))
+# print(suggest_seed_config([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}] , 'uploads/SpringBoot-Reactjs-Ecommerce-main copy 4/Ecommerce-Backend'))
 
 # text = '''```json
 # {

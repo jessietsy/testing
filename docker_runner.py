@@ -58,7 +58,7 @@ CMD ["sh", "-c", "java -jar $(ls target/*.jar | grep -v original | head -1)"]"""
 FROM gradle:8.5-jdk{java_version}
 WORKDIR /app
 COPY . .
-RUN gradle build -x test -q
+RUN gradle build -x test --info
 CMD ["sh", "-c", "java -jar build/libs/*.jar"]
 """
     else:
@@ -208,7 +208,7 @@ def stop_compose(project_root):
         print(f'Error stopping compose: {e}')
 
 
-def run_and_measure(project_root, build_system, port=8080, timeout=60): # static endpoints
+def run_and_measure(project_root, build_system, seed_config, port=8080, timeout=60): # static endpoints
     """Run application and obtain metrics using Locust"""
     result = {
         'build_success': False,

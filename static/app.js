@@ -9,6 +9,8 @@ const loadingMessage  = document.getElementById('loading-message')
 const resultsSection  = document.getElementById('results-section')
 const errorSection    = document.getElementById('error-section')
 const errorMessage    = document.getElementById('error-message')
+const runWithSeedBtn  = document.getElementById('run-with-seed-btn')
+const skipSeedBtn     = document.getElementById('skip-seed-btn')
 
 let selectedZip = null
 
@@ -42,16 +44,82 @@ function handleFileSelected(file) {
     evaluateBtn.classList.remove('hidden')
 }
 
+
 // ── Evaluation ─────────────────────────────────────────────────────────────
-evaluateBtn.addEventListener('click', runEvaluation)
-
-async function runEvaluation() {
+evaluateBtn.addEventListener('click', runDetection)
+// After /detect returns
+async function runDetection() {
     if (!selectedZip) return
-
-    showLoading('Uploading project...')
 
     const formData = new FormData()
     formData.append('file', selectedZip)
+
+
+    const response = await fetch('/detect', {
+        method: 'POST',
+        body: formData
+    })
+    const data = await response.json()
+
+    if (data.has_writes) {
+        // Show seed config form pre-populated with suggestion
+        showSeedConfigForm(data)
+    } else {
+        // No writes — go straight to evaluation
+        runEvaluation(data.upload_id, data.endpoints, data.port, null)
+    }
+}
+
+function showSeedConfigForm(detectionData) {
+    const suggestion = detectionData.seed_suggestion
+
+    document.getElementById('seed-form-section').classList.remove('hidden')
+    document.getElementById('seed-upload-id').value = detectionData.upload_id
+
+    if (suggestion) {
+        document.getElementById('seed-create-endpoint').value =
+            suggestion.create_endpoint
+        document.getElementById('seed-body').value =
+            JSON.stringify(suggestion.create_body, null, 2)
+        document.getElementById('seed-id-field').value =
+            suggestion.id_field || 'id'
+        document.getElementById('seed-delete-endpoint').value =
+            suggestion.delete_endpoint
+        document.getElementById('seed-note').textContent =
+            'We suggested this based on your entity classes. Please review and correct if needed.'
+    } else {
+        document.getElementById('seed-note').textContent =
+            'We could not auto-suggest seed data. Please fill in manually or skip.'
+    }
+}
+runWithSeedBtn.addEventListener('click', () => {
+    const uploadId = document.getElementById('seed-upload-id').value
+    const createEndpoint = document.getElementById('seed-create-endpoint').value
+    const body = document.getElementById('seed-body').value
+    const idField = document.getElementById('seed-id-field').value
+    const deleteEndpoint = document.getElementById('seed-delete-endpoint').value
+
+    runEvaluation(uploadId, null, null, { createEndpoint, body, idField, deleteEndpoint })
+})
+
+skipSeedBtn.addEventListener('click', () => {
+    const uploadId = document.getElementById('seed-upload-id').value
+    runEvaluation(uploadId, null, null, null)
+})
+
+
+async function runEvaluation(uploadId, endpoints, port, seedConfig) {
+    // if (!selectedZip) return
+
+    showLoading('Uploading project...')
+    const evaluateData = {
+        upload_id: uploadId,
+        endpoints: endpoints,
+        port: port,
+        seed_config: seedConfig
+    }
+    // const formData = new FormData()
+    // formData.append('file', selectedZip)
 
     // Update loading message while waiting
     const messages = [
@@ -68,7 +136,8 @@ async function runEvaluation() {
     try {
         const response = await fetch('/evaluate', {
             method: 'POST',
-            body: formData
+            body: evaluateData ? JSON.stringify(evaluateData) : null,
+            headers: { 'Content-Type': 'application/json' }
         })
 
         timers.forEach(clearTimeout)
@@ -91,6 +160,7 @@ async function runEvaluation() {
         console.error(err)
     }
 }
+
 
 // ── Display results ────────────────────────────────────────────────────────
 function showResults(data) {

@@ -25,6 +25,35 @@
             <button id="evaluate-btn" class="evaluate-btn hidden">Run Evaluation</button>
         </section>
 
+
+
+<!-- Seed Form Section -->
+<section id="seed-form-section" class="hidden">
+    <h2>Confirm test data</h2>
+    <p id="seed-note"></p>
+    <p>Write endpoints detected. Providing test data enables isolated
+       per-user load testing for more accurate results.</p>
+
+    <input type="hidden" id="seed-upload-id">
+
+    <label>Create endpoint</label>
+    <input type="text" id="seed-create-endpoint" placeholder="/api/product">
+
+    <label>Request body (JSON)</label>
+    <textarea id="seed-body" rows="8" placeholder='{"name": "test"}'></textarea>
+
+    <label>ID field in response</label>
+    <input type="text" id="seed-id-field" placeholder="id">
+
+    <label>Delete endpoint</label>
+    <input type="text" id="seed-delete-endpoint" placeholder="/api/product/{id}">
+
+    <button id="run-with-seed-btn">Run evaluation</button>
+    <button id="skip-seed-btn">Skip — use basic testing</button>
+</section>
+
+
+
         <!-- Loading Section -->
         <section id="loading-section" class="hidden">
             <div class="loader"></div>
@@ -234,6 +263,10 @@
         </section>
     </div>
 
+
+
+
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
+
 </html>
