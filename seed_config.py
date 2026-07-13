@@ -70,3 +70,7 @@ Respond ONLY with valid JSON in this exact format, no other text.
 
         suggestion = json.loads(clean_response)
 
+    except Exception as e:
+        print(f"Error generating seed config suggestion: {e}")
+        return None
+
