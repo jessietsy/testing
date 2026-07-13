@@ -27,7 +27,7 @@ def detect_java_files(extract_path):
     if any(f.endswith('pom.xml') for f in filenames):
         result['build_system'] = 'maven'
     if any(f.endswith('build.gradle') or f.endswith('build.gradle.kts') for f in filenames):
-        result['buil_system'] = 'gradle'
+        result['build_system'] = 'gradle'
 
     # Detect Java files and entry points
     for rel_path, full_path in all_files:
