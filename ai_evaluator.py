@@ -99,7 +99,7 @@ def evaluate(metrics, build_system, scores):
         if clean_response.endswith('```'):
             clean_response = clean_response.rsplit('```',1)[0]
 
-        result['ra  w_response'] = clean_response
+        result['raw_response'] = clean_response
         result['evaluation'] = json.loads(clean_response) # parse JSON response into python dict for easier use in frontend
         result['success'] = True
     
