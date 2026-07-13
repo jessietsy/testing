@@ -92,15 +92,15 @@ def evaluate(metrics, build_system, scores):
             contents = {'text': prompt(metrics, build_system, scores)}
         )
 
-        clean_reponse = response.text.strip()
+        clean_response = response.text.strip()
         
-        if clean_reponse.startswith('```'):
-            clean_reponse = clean_reponse.split('\n',1)[1] # only splits at the first newline, so it preserves the rest of the formatting in the response
-        if clean_reponse.endswith('```'):
-            clean_reponse = clean_reponse.rsplit('```',1)[0]
+        if clean_response.startswith('```'):
+            clean_response = clean_response.split('\n',1)[1] # only splits at the first newline, so it preserves the rest of the formatting in the response
+        if clean_response.endswith('```'):
+            clean_response = clean_response.rsplit('```',1)[0]
 
-        result['raw_response'] = clean_reponse
-        result['evaluation'] = json.loads(clean_reponse) # parse JSON response into python dict for easier use in frontend
+        result['ra  w_response'] = clean_response
+        result['evaluation'] = json.loads(clean_response) # parse JSON response into python dict for easier use in frontend
         result['success'] = True
     
     except json.JSONDecodeError:
