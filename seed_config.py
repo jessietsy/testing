@@ -18,10 +18,11 @@ def collect_entity_source(project_root):
 
                 except Exception:
                     pass
-    return entity_files
+
+    return '\n\n'.join(entity_files[:3]) if entity_files else None  # Limit to first 3 entity classes for brevity
 
 
-def suggest_seed_config(endpoints, project_root, build_system):
+def suggest_seed_config(endpoints, project_root):
     """Ask LLM to suggest a seed config based on entity source code if write endpoints detected"""
 
     entity_source = collect_entity_source(project_root)
@@ -60,7 +61,7 @@ Respond ONLY with valid JSON in this exact format, no other text.
             model = model_used,
             contents = {'text': prompt}
         )
-
+        print(response.text)  # Print the raw response for debugging
         clean_response = response.text.strip()
         
         if clean_response.startswith('```'):
@@ -69,8 +70,41 @@ Respond ONLY with valid JSON in this exact format, no other text.
             clean_response = clean_response.rsplit('```',1)[0]
 
         suggestion = json.loads(clean_response)
+        return suggestion
 
     except Exception as e:
         print(f"Error generating seed config suggestion: {e}")
         return None
+
+print(suggest_seed_config([{'method': 'GET', 'path': '/api/products'}, {'method': 'GET', 'path': '/api/product/{id}'}, {'method': 'POST', 'path': '/api/product'}, {'method': 'GET', 'path': '/api/product/{productId}/image'}, {'method': 'PUT', 'path': '/api/product/{id}'}, {'method': 'DELETE', 'path': '/api/product/{id}'}, {'method': 'GET', 'path': '/api/products/search'}] , 'uploads/SpringBoot-Reactjs-Ecommerce-main copy 4/Ecommerce-Backend'))
+
+# text = '''```json
+# {
+#     "create_endpoint": "/api/product",
+#     "create_body": {
+#         "name": "Sample Product X",
+#         "description": "A high-quality sample product for testing purposes.",
+#         "brand": "TechCorp",
+#         "price": 199.99,
+#         "category": "Electronics",
+#         "releaseDate": "2023-10-26T10:00:00Z",
+#         "productAvailable": true,
+#         "stockQuantity": 50
+#     },
+#     "id_field": "id",
+#     "delete_endpoint": "/api/product/<id placeholder>"
+# }
+# ```'''
+
+# text.strip()
+# print(text.startswith('```'))
+# print(text.endswith('```'))
+# if text.startswith('```'):
+#     text = text.split('\n',1)[1] # only splits at the first newline, so it preserves the rest of the formatting in the response
+
+# if text.endswith('```'):
+#     text = text.rsplit('```',1)[0]
+
+
+# print(text)
 
