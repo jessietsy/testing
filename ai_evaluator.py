@@ -104,7 +104,7 @@ def evaluate(metrics, build_system, scores):
         result['success'] = True
     
     except json.JSONDecodeError:
-        result['errors'].append('Model returned an unexpected format. Raw response: ' + clean_reponse)
+        result['errors'].append('Model returned an unexpected format. Raw response: ' + clean_response)
     except Exception as e:
         result['errors'].append('Error during evaluation: ' + str(e))
 
