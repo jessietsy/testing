@@ -28,31 +28,77 @@
 
 
 <!-- Seed Form Section -->
-<section id="seed-form-section" class="hidden">
-    <h2>Confirm test data</h2>
-    <p id="seed-note"></p>
-    <p>Write endpoints detected. Providing test data enables isolated
-       per-user load testing for more accurate results.</p>
+        <section id="seed-section" class="hidden">
+            <div class="seed-header">
+                <h2>Confirm test data</h2>
+                <p id="seed-note" class="seed-note"></p>
+            </div>
 
-    <input type="hidden" id="seed-upload-id">
+            <div class="detected-endpoints-box" id="detected-endpoints-box">
+                <p class="block-label">Detected endpoints</p>
+                <div id="detected-endpoints-list"></div>
+            </div>
 
-    <label>Create endpoint</label>
-    <input type="text" id="seed-create-endpoint" placeholder="/api/product">
+            <div class="seed-form">
+                <div class="seed-form-note" id="seed-suggestion-note"></div>
 
-    <label>Request body (JSON)</label>
-    <textarea id="seed-body" rows="8" placeholder='{"name": "test"}'></textarea>
+                <div class="form-group">
+                    <label class="form-label">
+                        Create endpoint
+                        <span class="form-hint">Which POST endpoint creates the primary resource?</span>
+                    </label>
+                    <select id="seed-create-endpoint" class="form-select"></select>
+                </div>
 
-    <label>ID field in response</label>
-    <input type="text" id="seed-id-field" placeholder="id">
+                <div class="form-group">
+                    <label class="form-label">
+                        Request body (JSON)
+                        <span class="form-hint">A valid body for the create endpoint above</span>
+                    </label>
+                    <textarea
+                        id="seed-body"
+                        class="form-textarea"
+                        rows="8"
+                        placeholder='{"name": "Test Product", "price": 9.99}'
+                    ></textarea>
+                    <p id="seed-body-error" class="form-error hidden">Must be valid JSON</p>
+                </div>
 
-    <label>Delete endpoint</label>
-    <input type="text" id="seed-delete-endpoint" placeholder="/api/product/{id}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">
+                            ID field in response
+                            <span class="form-hint">Field name containing the created resource ID</span>
+                        </label>
+                        <input type="text" id="seed-id-field" class="form-input" placeholder="id" value="id">
+                    </div>
 
-    <button id="run-with-seed-btn">Run evaluation</button>
-    <button id="skip-seed-btn">Skip — use basic testing</button>
-</section>
+                    <div class="form-group">
+                        <label class="form-label">
+                            Delete endpoint
+                            <span class="form-hint">Endpoint used to clean up after each user</span>
+                        </label>
+                        <select id="seed-delete-endpoint" class="form-select"></select>
+                    </div>
+                </div>
 
+                <div class="seed-actions">
+                    <button id="run-with-seed-btn" class="evaluate-btn" style="width:auto;padding:0.7rem 2rem">
+                        Run evaluation with isolated testing
+                    </button>
+                    <button id="skip-seed-btn" class="skip-btn">
+                        Skip — use basic testing
+                    </button>
+                </div>
 
+                <div class="seed-strategy-note">
+                    <strong>Isolated testing</strong> — each concurrent user creates and manages
+                    their own data, giving accurate results for all endpoint types.<br>
+                    <strong>Basic testing</strong> — uses a shared ID which may cause inflated
+                    failure rates for write endpoints.
+                </div>
+            </div>
+        </section>
 
         <!-- Loading Section -->
         <section id="loading-section" class="hidden">

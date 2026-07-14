@@ -9,10 +9,10 @@ const loadingMessage  = document.getElementById('loading-message')
 const resultsSection  = document.getElementById('results-section')
 const errorSection    = document.getElementById('error-section')
 const errorMessage    = document.getElementById('error-message')
-const runWithSeedBtn  = document.getElementById('run-with-seed-btn')
-const skipSeedBtn     = document.getElementById('skip-seed-btn')
+const seedSection     = document.getElementById('seed-section')
 
 let selectedZip = null
+let detectionData = null
 
 // ── File selection ─────────────────────────────────────────────────────────
 browseBtn.addEventListener('click', () => fileInput.click())
@@ -47,97 +47,156 @@ function handleFileSelected(file) {
 
 // ── Evaluation ─────────────────────────────────────────────────────────────
 evaluateBtn.addEventListener('click', runDetection)
+
 // After /detect returns
 async function runDetection() {
     if (!selectedZip) return
 
+    showLoading('Uploading and detecting project...')
+
     const formData = new FormData()
     formData.append('file', selectedZip)
 
+    try{
+        const response = await fetch('/detect', {
+            method: 'POST',
+            body: formData
+        })
+        const data = await response.json()
 
-    const response = await fetch('/detect', {
-        method: 'POST',
-        body: formData
-    })
-    const data = await response.json()
+        if (!response.ok) {
+            showError(data.error || 'Detection failed', data.details)
+            return 
+        }
 
+    detectionData = data
+    console.log('Detection data:', detectionData)
     if (data.has_writes) {
         // Show seed config form pre-populated with suggestion
-        showSeedConfigForm(data)
+        showSeedForm(data)
     } else {
         // No writes — go straight to evaluation
-        runEvaluation(data.upload_id, data.endpoints, data.port, null)
+        await runEvaluation(null)
     }
+} catch (err) {
+    showError('Could not reach the server. Make sure Flask is running.')
+    console.error(err)
 }
 
-function showSeedConfigForm(detectionData) {
-    const suggestion = detectionData.seed_suggestion
+function showSeedForm(data) {
+    hideAll()
+    seedSection.classList.remove('hidden')
 
-    document.getElementById('seed-form-section').classList.remove('hidden')
-    document.getElementById('seed-upload-id').value = detectionData.upload_id
+    const endpointsList = document.getElementById('detected-endpoints-list')
+    endpointsList.innerHTML = data.endpoints.map(ep => `
+        <span class="detected-endpoint-tag">
+            <span class="method-badge method-${ep.method}">${ep.method}</span>
+            ${ep.path}
+        </span>
+    `).join('')
+
+    
+const postEndpoints = data.endpoints.filter(ep => ep.method.toUpperCase() === 'POST')
+    const deleteEndpoints = data.endpoints.filter(ep => ep.method.toUpperCase() === 'DELETE')
+
+    const createSelect = document.getElementById('seed-create-endpoint')
+    createSelect.innerHTML = postEndpoints.map(ep =>
+        `<option value="${ep.path}">${ep.method} ${ep.path}</option>`
+    ).join('')
+
+    const deleteSelect = document.getElementById('seed-delete-endpoint')
+    deleteSelect.innerHTML = [
+        '<option value="">None</option>',
+        ...deleteEndpoints.map(ep =>
+            `<option value="${ep.path}">${ep.method} ${ep.path}</option>`
+        )
+    ].join('')
+
+const suggestion = data.seed_suggestion
+    const noteEl = document.getElementById('seed-suggestion-note')
 
     if (suggestion) {
-        document.getElementById('seed-create-endpoint').value =
-            suggestion.create_endpoint
-        document.getElementById('seed-body').value =
-            JSON.stringify(suggestion.create_body, null, 2)
-        document.getElementById('seed-id-field').value =
-            suggestion.id_field || 'id'
-        document.getElementById('seed-delete-endpoint').value =
-            suggestion.delete_endpoint
-        document.getElementById('seed-note').textContent =
-            'We suggested this based on your entity classes. Please review and correct if needed.'
+        noteEl.className = 'seed-form-note has-suggestion'
+        noteEl.textContent = 'We suggested this based on your entity classes. Review and adjust if needed before running.'
+
+        if (suggestion.create_endpoint) {
+            createSelect.value = suggestion.create_endpoint
+        }
+        if (suggestion.create_body) {
+            document.getElementById('seed-body').value =
+                JSON.stringify(suggestion.create_body, null, 2)
+        }
+        if (suggestion.id_field) {
+            document.getElementById('seed-id-field').value = suggestion.id_field
+        }
+        if (suggestion.delete_endpoint) {
+            deleteSelect.value = suggestion.delete_endpoint
+        }
     } else {
-        document.getElementById('seed-note').textContent =
-            'We could not auto-suggest seed data. Please fill in manually or skip.'
+        noteEl.className = 'seed-form-note no-suggestion'
+        noteEl.textContent = 'We could not auto-suggest seed data for this project. Fill in the fields below or skip to use basic testing.'
     }
+const writeCount = data.endpoints.filter(ep =>
+        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(ep.method.toUpperCase())
+    ).length
+    document.getElementById('seed-note').textContent =
+        `${writeCount} write endpoint${writeCount !== 1 ? 's' : ''} detected. Provide test data to enable isolated per-user load testing.`
 }
-runWithSeedBtn.addEventListener('click', () => {
-    const uploadId = document.getElementById('seed-upload-id').value
-    const createEndpoint = document.getElementById('seed-create-endpoint').value
-    const body = document.getElementById('seed-body').value
-    const idField = document.getElementById('seed-id-field').value
-    const deleteEndpoint = document.getElementById('seed-delete-endpoint').value
 
-    runEvaluation(uploadId, null, null, { createEndpoint, body, idField, deleteEndpoint })
+document.getElementById('run-with-seed-btn').addEventListener('click', async () => {
+    const bodyText = document.getElementById('seed-body').value.trim()
+    const errorEl = document.getElementById('seed-body-error')
+
+    // Validate JSON
+    let body
+    try {
+        body = bodyText ? JSON.parse(bodyText) : {}
+        errorEl.classList.add('hidden')
+    } catch (e) {
+        errorEl.classList.remove('hidden')
+        return
+    }
+
+    const seedConfig = {
+        create_endpoint: document.getElementById('seed-create-endpoint').value,
+        create_body: body,
+        id_field: document.getElementById('seed-id-field').value || 'id',
+        delete_endpoint: document.getElementById('seed-delete-endpoint').value || null
+    }
+
+    await runEvaluation(seedConfig)
 })
 
-skipSeedBtn.addEventListener('click', () => {
-    const uploadId = document.getElementById('seed-upload-id').value
-    runEvaluation(uploadId, null, null, null)
-})
+document.getElementById('skip-seed-btn').addEventListener('click', async () => {
+    await runEvaluation(null)
+})}
 
-
-async function runEvaluation(uploadId, endpoints, port, seedConfig) {
+async function runEvaluation(seedConfig) {
     // if (!selectedZip) return
 
-    showLoading('Uploading project...')
-    const evaluateData = {
-        upload_id: uploadId,
-        endpoints: endpoints,
-        port: port,
-        seed_config: seedConfig
-    }
+    showLoading('Building Docker container...')
+    const timers = [
+        setTimeout(() => { loadingMessage.textContent = 'Starting application...' }, 8000),
+        setTimeout(() => { loadingMessage.textContent = 'Running load test...' }, 20000),
+        setTimeout(() => { loadingMessage.textContent = 'Collecting metrics...' }, 40000),
+        setTimeout(() => { loadingMessage.textContent = 'Evaluating with AI...' }, 55000)
+    ]
     // const formData = new FormData()
     // formData.append('file', selectedZip)
 
-    // Update loading message while waiting
-    const messages = [
-        [4000,  'Building Docker container...'],
-        [10000, 'Starting application...'],
-        [20000, 'Running load test...'],
-        [40000, 'Collecting metrics...'],
-        [55000, 'Evaluating with AI...']
-    ]
-    const timers = messages.map(([delay, msg]) =>
-        setTimeout(() => { loadingMessage.textContent = msg }, delay)
-    )
+  
+
 
     try {
         const response = await fetch('/evaluate', {
             method: 'POST',
-            body: evaluateData ? JSON.stringify(evaluateData) : null,
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                endpoints: detectionData.endpoints,
+                port: detectionData.port,
+                filename: selectedZip ? selectedZip.name : 'unknown.zip',
+                seed_config: seedConfig
+            })
         })
 
         timers.forEach(clearTimeout)
@@ -516,6 +575,7 @@ function hideAll() {
     loadingSection.classList.add('hidden')
     resultsSection.classList.add('hidden')
     errorSection.classList.add('hidden')
+    seedSection.classList.add('hidden')
 }
 
 // ── Reset ──────────────────────────────────────────────────────────────────
