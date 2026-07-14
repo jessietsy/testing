@@ -7,34 +7,141 @@ client = docker.from_env()
 def sanitise_path(path):
     return re.sub(r'\{[^}]+\}', '1', path) # replace path variables like {id} with dummy value '1' for testing purposes
 
-def generate_locust(endpoints, output_path):
-    tasks = ''
-    for i, ep in enumerate(endpoints):
-        path = sanitise_path(ep['path'])
-        tasks += f"""\
-    @task
-    def endpoint_{i}(self):
-        with self.client.{ep['method'].lower()}('{path}', catch_response=True) as response:
-            if response.status_code == 0:
-                response.failure('No response')
-            elif response.status_code >= 400:
-                response.failure(f'Status code {{response.status_code}}')
-            else:
-                response.success()
-        
-"""
-    
-    content = f"""\
-from locust import HttpUser,task, between
-class AppUser(HttpUser):
-    wait_time = between(1, 2)
+def generate_locust(endpoints, output_path, seed_config=None):
+    if seed_config:
+        content = build_isolated_locustfile(endpoints, seed_config)
+    else:
+        content = build_basic_locustfile(endpoints)
 
-{tasks}"""
+
     locust_path = os.path.join(output_path, 'locustfile.py')
     with open(locust_path, 'w') as file:
         file.write(content)
 
     return locust_path
+
+def build_isolated_locustfile(endpoints, seed_config):
+    create_path = seed_config['create_endpoint']
+    create_body = json.dumps(seed_config['create_body'])
+    id_field = seed_config.get('id_field', 'id')
+
+    # Build delete path using dynamic ID
+    delete_ep = next(
+        (ep for ep in endpoints if ep['method'].upper() == 'DELETE'),
+        None
+    )
+    delete_path = sanitise_path(delete_ep['path']).replace('1', '{self.resource_id}') \
+        if delete_ep else None
+
+    on_stop_block = f"""
+    def on_stop(self):
+        if self.resource_id:
+            self.client.delete(f"{delete_path}")
+""" if delete_path else ""
+
+    tasks = build_tasks(
+        endpoints,
+        skip_method='DELETE',
+        use_dynamic_id=True
+    )
+
+    return f"""\
+from locust import HttpUser, task, between
+import json
+
+class AppUser(HttpUser):
+    wait_time = between(1, 2)
+    resource_id = None
+
+    def on_start(self):
+        response = self.client.post(
+            "{create_path}",
+            json={create_body},
+            catch_response=True
+        )
+        if response.status_code in [200, 201]:
+            try:
+                data = response.json()
+                self.resource_id = data.get('{id_field}') or 1
+                response.success()
+            except Exception:
+                self.resource_id = 1
+                response.success()
+        else:
+            self.resource_id = 1
+            response.failure(f"Seeding failed: {{response.status_code}}")
+{on_stop_block}
+{tasks}
+"""
+
+def build_basic_locustfile(endpoints):
+    tasks = build_tasks(endpoints, use_dynamic_id=False)
+    return f"""\
+from locust import HttpUser, task, between
+
+class AppUser(HttpUser):
+    wait_time = between(1, 2)
+    # NOTE: using shared ID — include seed config for isolated testing
+
+{tasks}
+"""
+def build_tasks(endpoints, skip_method=None, use_dynamic_id=False):
+    """Build Locust task functions generically for any endpoint list"""
+    import re
+    tasks = ""
+
+    for i, ep in enumerate(endpoints):
+        method = ep['method'].upper()
+
+        if skip_method and method == skip_method:
+            continue
+
+        path = sanitise_path(ep['path'])
+        category = categorise_endpoint(method, ep['path'])
+
+        # Replace hardcoded 1 with dynamic resource_id if isolating
+        if use_dynamic_id:
+            path = re.sub(r'/1(/|$)', r'/{self.resource_id}\1', path)
+            # Wrap in f-string if dynamic
+            path_str = f'f"{path}"' if 'self.resource_id' in path else f'"{path}"'
+        else:
+            path_str = f'"{path}"'
+
+        # Append search parameter for search endpoints
+        if category == 'search':
+            if use_dynamic_id:
+                path_str = path_str.rstrip('"') + '?q=test"'
+            else:
+                path_str = f'"{path}?q=test"'
+
+        if method in ['GET', 'DELETE']:
+            tasks += f"""\
+    @task
+    def endpoint_{i}(self):
+        with self.client.{method.lower()}({path_str}, catch_response=True) as response:
+            if response.status_code >= 400:
+                response.failure(f"Got {{response.status_code}}")
+            else:
+                response.success()
+
+"""
+        elif method in ['POST', 'PUT', 'PATCH']:
+            tasks += f"""\
+    @task
+    def endpoint_{i}(self):
+        with self.client.{method.lower()}(
+            {path_str},
+            json={{}},
+            catch_response=True
+        ) as response:
+            if response.status_code >= 400:
+                response.failure(f"Got {{response.status_code}}")
+            else:
+                response.success()
+
+"""
+
+    return tasks
 
 def wait_for_app(host, port, timeout=120):
     # Check if app is responding before starting tests
@@ -75,15 +182,16 @@ def get_endpoints(project_root, host, port):
 
     return []
 
-def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.'):
+def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.', seed_config=None):
     result = {
         'success': False,
         'errors': [],
-        'metrics': {}
+        'metrics': {},
+        'test_strategy': 'isolated' if seed_config else 'basic'
        }
     
     # generate locustfile
-    locust_path = generate_locust(endpoints, output_path)
+    locust_path = generate_locust(endpoints, output_path, seed_config=seed_config)
 
     # wait for app to start
     print(f'Waiting for app on port {port}...')

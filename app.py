@@ -23,8 +23,6 @@ def detect():
         return jsonify({'error': 'No file uploaded'}), 400
         
     file = request.files['file']
-    upload_id = str(uuid.uuid4())
-    print(upload_id)
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
 
@@ -58,7 +56,10 @@ def detect():
     if has_writes:
         seed_suggestion = suggest_seed_config(static_endpoints, detection['project_root'])  
     
-    return jsonify({'upload_id': upload_id, 'file': file.filename, 'extract_path': extract_path, 'endpoints': static_endpoints, 'port': port, 'has_writes': has_writes, 'seed_suggestion': seed_suggestion})
+    print(f'Has write endpoints: {has_writes}')
+    print(f'Seed suggestion: {seed_suggestion}')
+
+    return jsonify({'file': file.filename, 'extract_path': extract_path, 'endpoints': static_endpoints, 'port': port, 'has_writes': has_writes, 'seed_suggestion': seed_suggestion})
 
 
 
@@ -98,9 +99,8 @@ def evaluator():
 
     data = request.json
     print(data)
-    upload_id = data.get('upload_id')
-    static_endpoints = data.get('endpoints')
-    port = data.get('port')
+    static_endpoints = data.get('endpoints', [])
+    port = data.get('port', 8080)
     seed_config = data.get('seed_config')  
     extract_path = os.path.join(UPLOAD_FOLDER, 'project')  # Assuming the project is extracted to this path
 
@@ -148,10 +148,7 @@ def evaluator():
     finally:
         shutil.rmtree(extract_path, ignore_errors=True) # Clean up extracted files
 
-# @app.route('/detect', methods=['POST'])
-# def detect():
-#     file = request.files['file']
-#     upload_id
+
 
 @app.route('/history')
 def history():
