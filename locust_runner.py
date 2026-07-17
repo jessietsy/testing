@@ -13,7 +13,7 @@ def generate_locust(endpoints, output_path, seed_config=None):
     else:
         content = build_basic_locustfile(endpoints)
 
-
+    print(content)
     locust_path = os.path.join(output_path, 'locustfile.py')
     with open(locust_path, 'w') as file:
         file.write(content)
@@ -22,7 +22,7 @@ def generate_locust(endpoints, output_path, seed_config=None):
 
 def build_isolated_locustfile(endpoints, seed_config):
     create_path = seed_config['create_endpoint']
-    create_body = json.dumps(seed_config['create_body'])
+    create_body = seed_config['create_body']
     id_field = seed_config.get('id_field', 'id')
 
     # Build delete path using dynamic ID
@@ -81,7 +81,6 @@ from locust import HttpUser, task, between
 
 class AppUser(HttpUser):
     wait_time = between(1, 2)
-    # NOTE: using shared ID — include seed config for isolated testing
 
 {tasks}
 """
@@ -191,7 +190,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
        }
     
     # generate locustfile
-    locust_path = generate_locust(endpoints, output_path, seed_config=seed_config)
+    locust_path = generate_locust(endpoints, output_path, seed_config)
 
     # wait for app to start
     print(f'Waiting for app on port {port}...')
