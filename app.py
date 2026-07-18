@@ -11,8 +11,6 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok = True)
 
-
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -107,27 +105,13 @@ def evaluator():
     try:
         detection = detect_java_files(extract_path)
         print(detection)
+        
         result = run_and_measure(detection['project_root'], detection['build_system'], seed_config=seed_config, port=port) 
+        
         print(result)
+        
         if not result['build_success']:
             return jsonify({'errors': result['errors']}), 400
-
-        
-        # result = {
-        #     'build_success': True,
-        #     'run_success': True,
-        #     'metrics': {},
-        #     'errors': []
-        # }
-
-        # result['metrics'] = {
-        #     'response_time_seconds': 0.1,
-        #     'cpu_percent': 50.0,
-        #     'memory_usage': 100.0,
-        #     'memory_percent': 25.0
-        # }
-        # result = {'build_success': True, 'run_success': True, 'metrics': {'avg_response_time_ms': 0, 'min_response_time_ms': 16.01, 'max_response_time_ms': 612.07, 'p95_response_time_ms': 0, 'requests_per_second': 0, 'cpu_peak_percent': 30.03, 'cpu_average_percent': 8.45, 'memory_peak_mb': 211.12, 'memory_average_mb': 207.26, 'total_requests': 19, 'failed_requests': 19, 'failure_rate_percent': 100.0, 'concurrent_users': 10}, 'errors': []}
-        # print(result)
 
         scores = result['metrics'].get('scores', {})
 

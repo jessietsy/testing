@@ -63,13 +63,13 @@ class AppUser(HttpUser):
             try:
                 data = response.json()
                 self.resource_id = data.get('{id_field}') or 1
-                response.success()
+
             except Exception:
                 self.resource_id = 1
-                response.success()
+
         else:
             self.resource_id = 1
-            response.failure(f"Seeding failed: {{response.status_code}}")
+            print(f"Seeding failed: {{response.status_code}} {{response.text}}")
 {on_stop_block}
 {tasks}
 """

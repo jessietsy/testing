@@ -145,6 +145,7 @@ const writeCount = data.endpoints.filter(ep =>
 
 document.getElementById('run-with-seed-btn').addEventListener('click', async () => {
     const bodyText = document.getElementById('seed-body').value.trim()
+    console.log(bodyText)
     const errorEl = document.getElementById('seed-body-error')
 
     // Validate JSON

@@ -321,7 +321,8 @@ def run_and_measure(project_root, build_system, seed_config=None, port=8080, tim
                 port=port,
                 duration=30,
                 users=10,
-                output_path=project_root    
+                output_path=project_root,
+                seed_config=seed_config
             )
 
             result['metrics'] = load_result['metrics']
