@@ -68,14 +68,36 @@ def score_metric_with_thresholds(metric_name, value, thresholds):
         else:
             return max(0, 25 * (1 - (value - thresholds['fair']) / thresholds['fair'])) if thresholds['fair'] > 0 else 0
 
-def score_endpoint(endpoint_data):
+def score_endpoint(endpoint_data, custom_thresholds=None):
     """Score a single endpoint against its category thresholds"""
     category = endpoint_data['category']
     metrics = endpoint_data['metrics']
-    thresholds = ENDPOINT_CATEGORIES.get(
-        category,
-        ENDPOINT_CATEGORIES['simple_read']
-    )['thresholds']
+    if custom_thresholds and category in custom_thresholds:
+        custom = custom_thresholds[category]
+        thresholds = {
+            'avg_response_time_ms': {
+                'excellent': custom['excellent'],
+                'good': custom['good'],
+                'fair': custom['fair'],
+                'poor': float('inf')
+            },
+            'p95_response_time_ms': {
+                # P95 thresholds scaled proportionally from avg
+                'excellent': custom['excellent'] * 2,
+                'good': custom['good'] * 2,
+                'fair': custom['fair'] * 2,
+                'poor': float('inf')
+            },
+            'failure_rate_percent': ENDPOINT_CATEGORIES.get(
+                category, ENDPOINT_CATEGORIES['simple_read']
+            )['thresholds']['failure_rate_percent']
+        }
+
+    else:
+        thresholds = ENDPOINT_CATEGORIES.get(
+            category,
+            ENDPOINT_CATEGORIES['simple_read']
+        )['thresholds']
 
     weighted_score = 0
     total_weight = 0
@@ -96,7 +118,8 @@ def score_endpoint(endpoint_data):
     return {
         'score': round(final_score, 1),
         'grade': score_to_grade(final_score),
-        'metric_scores': metric_scores
+        'metric_scores': metric_scores,
+        'thresholds_used': custom if (custom_thresholds and category in custom_thresholds) else 'default'
     }
 
 def score_resource_utilisation(aggregate_all):
@@ -127,7 +150,7 @@ def score_resource_utilisation(aggregate_all):
 
     return round(cpu_score * 0.5 + memory_score * 0.5, 1)
 
-def score_all_endpoints(per_endpoint_metrics, aggregate_all):
+def score_all_endpoints(per_endpoint_metrics, aggregate_all, custom_thresholds=None):
     """
     Score all endpoints individually then roll up into
     ISO sub-characteristic scores and overall score
@@ -139,7 +162,7 @@ def score_all_endpoints(per_endpoint_metrics, aggregate_all):
         if ep_data['metrics'].get('total_requests', 0) > 0:
             endpoint_scores[key] = {
                 **ep_data,
-                'scoring': score_endpoint(ep_data)
+                'scoring': score_endpoint(ep_data, custom_thresholds)
             }
 
     if not endpoint_scores:
@@ -189,6 +212,7 @@ def score_all_endpoints(per_endpoint_metrics, aggregate_all):
     return {
         'overall_score': round(overall, 1),
         'grade': score_to_grade(overall),
+        'thresholds_modified': custom_thresholds is not None,
         'sub_characteristics': {
             'time_behaviour': {
                 'score': time_behaviour_score,

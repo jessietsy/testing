@@ -99,15 +99,16 @@ def evaluator():
     print(data)
     static_endpoints = data.get('endpoints', [])
     port = data.get('port', 8080)
-    seed_config = data.get('seed_config')  
+    seed_config = data.get('seed_config') 
+    custom_thresholds = data.get('custom_thresholds')   
     extract_path = os.path.join(UPLOAD_FOLDER, 'project')  # Assuming the project is extracted to this path
 
     try:
         detection = detect_java_files(extract_path)
         print(detection)
         
-        result = run_and_measure(detection['project_root'], detection['build_system'], seed_config=seed_config, port=port) 
-        
+        result = run_and_measure(detection['project_root'], detection['build_system'], seed_config=seed_config, port=port, custom_thresholds=custom_thresholds) 
+        test_strategy = result.get('test_strategy', 'basic')
         print(result)
         
         if not result['build_success']:
@@ -127,7 +128,7 @@ def evaluator():
         
         print()
         print({'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
-        return jsonify({'eval_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors']})
+        return jsonify({'eval_id': eval_id, 'detected endpoints': static_endpoints, 'detected_port': port, 'test_strategy': test_strategy, 'metrics': result['metrics'], 'scores': scores, 'evaluation': eval_result['evaluation'], 'run_errors': result['errors'], 'thresholds modified':custom_thresholds is not None})
 
     finally:
         shutil.rmtree(extract_path, ignore_errors=True) # Clean up extracted files

@@ -21,6 +21,7 @@
                 <p>Drop your Java project zip here</p>
                 <button id="browse-btn">Browse files</button>
             </div>
+
             <p id="selected-file" class="selected-file hidden"></p>
             <button id="evaluate-btn" class="evaluate-btn hidden">Run Evaluation</button>
         </section>
@@ -98,6 +99,31 @@
                     failure rates for write endpoints.
                 </div>
             </div>
+
+                <!-- Threshold Review (collapsed by default) -->
+            <div class="threshold-collapsible">
+                <button class="threshold-toggle" id="threshold-toggle" type="button">
+                    <span>Advanced - Review performance thresholds</span>
+                    <span class="toggle-icon" id="toggle-icon">▼</span>
+                </button>
+
+                <div id="threshold-panel" class="threshold-panel hidden">
+                    <p class="threshold-intro">
+                        These thresholds determine how endpoint response times are scored. They are based on established web performance research and apply only to endpoints detected in this project. Adjust if different standards are more appropriate for your application.
+                    </p>
+
+                    <div id="threshold-categories"></div>
+
+                    <div class="threshold-footer">
+                        <button id="reset-thresholds-btn" class="skip-btn" type="button">
+                            Reset thresholds to defaults
+                        </button>
+                        <span class="threshold-footer-note">
+                            Changes apply to this evaluation only
+                        </span>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- Loading Section -->
@@ -134,6 +160,9 @@
             </div>
 
             <p class="summary-text" id="overall-summary"></p>
+
+            <!-- Load test strategy badge-->
+            <div id="strategy-badge-row" style="margin-bottom:1.5rem"></div>
 
             <!-- Sub-characteristic Scores -->
             <h2 class="section-heading">ISO Sub-characteristics</h2>

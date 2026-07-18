@@ -181,7 +181,7 @@ def get_endpoints(project_root, host, port):
 
     return []
 
-def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.', seed_config=None):
+def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.', seed_config=None, custom_thresholds=None):
     result = {
         'success': False,
         'errors': [],
@@ -303,7 +303,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
                 # }
 
                 aggregate_all = get_aggregate(per_endpoint_metrics, docker_stats, users)
-                scores = score_all_endpoints(per_endpoint_metrics, aggregate_all)
+                scores = score_all_endpoints(per_endpoint_metrics, aggregate_all, custom_thresholds=custom_thresholds)
             
 
                 result['metrics'] = {

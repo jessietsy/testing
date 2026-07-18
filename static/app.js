@@ -11,8 +11,71 @@ const errorSection    = document.getElementById('error-section')
 const errorMessage    = document.getElementById('error-message')
 const seedSection     = document.getElementById('seed-section')
 
+// ── Default thresholds ─────────────────────────────────────────────────────
+const DEFAULT_THRESHOLDS = {
+    simple_read: {
+        description: 'Simple data retrieval by ID',
+        excellent: 50,
+        good: 150,
+        fair: 400
+    },
+    list_read: {
+        description: 'Retrieving a list or collection',
+        excellent: 100,
+        good: 300,
+        fair: 800
+    },
+    search: {
+        description: 'Search or filter operation',
+        excellent: 200,
+        good: 500,
+        fair: 1500
+    },
+    create: {
+        description: 'Creating a new resource',
+        excellent: 100,
+        good: 300,
+        fair: 800
+    },
+    update: {
+        description: 'Updating an existing resource',
+        excellent: 100,
+        good: 300,
+        fair: 800
+    },
+    delete: {
+        description: 'Deleting a resource',
+        excellent: 50,
+        good: 150,
+        fair: 400
+    },
+    file_operation: {
+        description: 'File upload, download or image operation',
+        excellent: 500,
+        good: 1500,
+        fair: 5000
+    }
+}
+
+// Track which categories are present in the current project
+let detectedCategories = []
+
+
 let selectedZip = null
 let detectionData = null
+
+function categoriseEndpoint(method, path) {
+    const p = path.toLowerCase()
+    if (/\/(image|file|upload|download|attachment)/.test(p)) return 'file_operation'
+    if (/\/(search|filter|query|find)/.test(p)) return 'search'
+    if (method === 'POST') return 'create'
+    if (method === 'PUT' || method === 'PATCH') return 'update'
+    if (method === 'DELETE') return 'delete'
+    if (method === 'GET') {
+        return /\/\d+$|\/[a-f0-9-]{36}$/.test(path) ? 'simple_read' : 'list_read'
+    }
+    return 'simple_read'
+}
 
 // ── File selection ─────────────────────────────────────────────────────────
 browseBtn.addEventListener('click', () => fileInput.click())
@@ -43,6 +106,203 @@ function handleFileSelected(file) {
     selectedFile.classList.remove('hidden')
     evaluateBtn.classList.remove('hidden')
 }
+
+// ── Threshold collapsible ──────────────────────────────────────────────────
+document.getElementById('threshold-toggle').addEventListener('click', () => {
+    const panel = document.getElementById('threshold-panel')
+    const icon = document.getElementById('toggle-icon')
+    const isOpen = !panel.classList.contains('hidden')
+
+    if (isOpen) {
+        panel.classList.add('hidden')
+        icon.classList.remove('open')
+    } else {
+        panel.classList.remove('hidden')
+        icon.classList.add('open')
+    }
+})
+
+function renderThresholdPanel(endpoints) {
+    // Work out which categories this project actually uses
+    const categoriesInProject = new Set()
+    endpoints.forEach(ep => {
+        const cat = categoriseEndpoint(ep.method.toUpperCase(), ep.path)
+        categoriesInProject.add(cat)
+    })
+
+    detectedCategories = Array.from(categoriesInProject)
+
+    const container = document.getElementById('threshold-categories')
+    container.innerHTML = ''
+
+    detectedCategories.forEach(category => {
+        const defaults = DEFAULT_THRESHOLDS[category]
+        if (!defaults) return
+
+        const block = document.createElement('div')
+        block.className = 'threshold-category'
+        block.dataset.category = category
+
+        block.innerHTML = `
+            <div class="threshold-category-header">
+                <span class="method-badge" style="background:#ede9fe;color:#3730a3;font-family:inherit">
+                    ${category.replace(/_/g, ' ')}
+                </span>
+                <span class="threshold-category-desc">${defaults.description}</span>
+            </div>
+            <div class="threshold-fields">
+                <div class="threshold-field">
+                    <span class="threshold-band-label band-excellent">Excellent</span>
+                    <div class="threshold-input-wrapper">
+                        <input
+                            type="number"
+                            class="threshold-input"
+                            id="thresh-${category}-excellent"
+                            value="${defaults.excellent}"
+                            min="1"
+                            data-default="${defaults.excellent}"
+                        >
+                        <span class="threshold-unit">ms</span>
+                    </div>
+                    <span style="font-size:0.7rem;color:#aaa">under this = excellent</span>
+                </div>
+                <div class="threshold-field">
+                    <span class="threshold-band-label band-good">Good</span>
+                    <div class="threshold-input-wrapper">
+                        <input
+                            type="number"
+                            class="threshold-input"
+                            id="thresh-${category}-good"
+                            value="${defaults.good}"
+                            min="1"
+                            data-default="${defaults.good}"
+                        >
+                        <span class="threshold-unit">ms</span>
+                    </div>
+                    <span style="font-size:0.7rem;color:#aaa">under this = good</span>
+                </div>
+                <div class="threshold-field">
+                    <span class="threshold-band-label band-fair">Fair</span>
+                    <div class="threshold-input-wrapper">
+                        <input
+                            type="number"
+                            class="threshold-input"
+                            id="thresh-${category}-fair"
+                            value="${defaults.fair}"
+                            min="1"
+                            data-default="${defaults.fair}"
+                        >
+                        <span class="threshold-unit">ms</span>
+                    </div>
+                    <span style="font-size:0.7rem;color:#aaa">under this = fair</span>
+                </div>
+            </div>
+        `
+        container.appendChild(block)
+    })
+
+    // Mark inputs as modified when changed
+    container.querySelectorAll('.threshold-input').forEach(input => {
+        input.addEventListener('input', () => {
+            const isModified = input.value !== input.dataset.default
+            input.classList.toggle('modified', isModified)
+            validateThresholdRow(input)
+        })
+    })
+}
+
+function validateThresholdRow(changedInput) {
+    // Get category from input id e.g. thresh-simple_read-excellent
+    const parts = changedInput.id.split('-')
+    const band = parts[parts.length - 1]
+    const category = parts.slice(1, parts.length - 1).join('-')
+
+    const excellent = parseInt(document.getElementById(`thresh-${category}-excellent`).value)
+    const good = parseInt(document.getElementById(`thresh-${category}-good`).value)
+    const fair = parseInt(document.getElementById(`thresh-${category}-fair`).value)
+
+    // Thresholds must be ascending: excellent < good < fair
+    const excellentInput = document.getElementById(`thresh-${category}-excellent`)
+    const goodInput = document.getElementById(`thresh-${category}-good`)
+    const fairInput = document.getElementById(`thresh-${category}-fair`)
+
+    if (excellent >= good || good >= fair) {
+        excellentInput.style.borderColor = '#dc2626'
+        goodInput.style.borderColor = '#dc2626'
+        fairInput.style.borderColor = '#dc2626'
+    } else {
+        // Restore modified or default border
+        ;[excellentInput, goodInput, fairInput].forEach(el => {
+            el.style.borderColor = ''
+        })
+    }
+}
+
+function readThresholds() {
+    /**
+     * Read all threshold inputs and return a dict of custom thresholds.
+     * Only includes categories where at least one value was modified.
+     * Returns null if nothing was changed (use defaults).
+     */
+    const customThresholds = {}
+    let anyModified = false
+
+    detectedCategories.forEach(category => {
+        const excellentEl = document.getElementById(`thresh-${category}-excellent`)
+        const goodEl = document.getElementById(`thresh-${category}-good`)
+        const fairEl = document.getElementById(`thresh-${category}-fair`)
+
+        if (!excellentEl) return
+
+        const excellent = parseInt(excellentEl.value)
+        const good = parseInt(goodEl.value)
+        const fair = parseInt(fairEl.value)
+
+        const defaults = DEFAULT_THRESHOLDS[category]
+        const isModified = (
+            excellent !== defaults.excellent ||
+            good !== defaults.good ||
+            fair !== defaults.fair
+        )
+
+        if (isModified) anyModified = true
+
+        customThresholds[category] = {
+            excellent,
+            good,
+            fair,
+            modified: isModified
+        }
+    })
+
+    return anyModified ? customThresholds : null
+}
+
+function thresholdsAreValid() {
+    let valid = true
+    detectedCategories.forEach(category => {
+        const excellent = parseInt(document.getElementById(`thresh-${category}-excellent`)?.value || 0)
+        const good = parseInt(document.getElementById(`thresh-${category}-good`)?.value || 0)
+        const fair = parseInt(document.getElementById(`thresh-${category}-fair`)?.value || 0)
+        if (excellent >= good || good >= fair) valid = false
+    })
+    return valid
+}
+
+// Reset button
+document.getElementById('reset-thresholds-btn').addEventListener('click', () => {
+    detectedCategories.forEach(category => {
+        const defaults = DEFAULT_THRESHOLDS[category]
+        ;['excellent', 'good', 'fair'].forEach(band => {
+            const input = document.getElementById(`thresh-${category}-${band}`)
+            if (input) {
+                input.value = defaults[band]
+                input.classList.remove('modified')
+                input.style.borderColor = ''
+            }
+        })
+    })
+})
 
 
 // ── Evaluation ─────────────────────────────────────────────────────────────
@@ -141,6 +401,9 @@ const writeCount = data.endpoints.filter(ep =>
     ).length
     document.getElementById('seed-note').textContent =
         `${writeCount} write endpoint${writeCount !== 1 ? 's' : ''} detected. Provide test data to enable isolated per-user load testing.`
+
+
+        renderThresholdPanel(data.endpoints)
 }
 
 document.getElementById('run-with-seed-btn').addEventListener('click', async () => {
@@ -174,6 +437,12 @@ document.getElementById('skip-seed-btn').addEventListener('click', async () => {
 
 async function runEvaluation(seedConfig) {
     // if (!selectedZip) return
+    if (!thresholdsAreValid()) {
+        alert('Threshold values are invalid. Excellent must be less than Good, which must be less than Fair.')
+        return
+    }
+
+    const customThresholds = readThresholds()
 
     showLoading('Building Docker container...')
     const timers = [
@@ -185,8 +454,6 @@ async function runEvaluation(seedConfig) {
     // const formData = new FormData()
     // formData.append('file', selectedZip)
 
-  
-
 
     try {
         const response = await fetch('/evaluate', {
@@ -196,7 +463,8 @@ async function runEvaluation(seedConfig) {
                 endpoints: detectionData.endpoints,
                 port: detectionData.port,
                 filename: selectedZip ? selectedZip.name : 'unknown.zip',
-                seed_config: seedConfig
+                seed_config: seedConfig,
+                custom_thresholds: customThresholds // null if no changes, or dict of modified thresholds
             })
         })
 
@@ -212,7 +480,7 @@ async function runEvaluation(seedConfig) {
             return
         }
 
-        showResults(data)
+        showResults(data, seedConfig, customThresholds)
 
     } catch (err) {
         timers.forEach(clearTimeout)
@@ -223,7 +491,7 @@ async function runEvaluation(seedConfig) {
 
 
 // ── Display results ────────────────────────────────────────────────────────
-function showResults(data) {
+function showResults(data, seedConfig, customThresholds) {
     hideAll()
     resultsSection.classList.remove('hidden')
 
@@ -233,6 +501,7 @@ function showResults(data) {
     const perEndpoint = scores.endpoint_scores || {}
     const evaluation = data.evaluation || {}
     const subChars   = scores.sub_characteristics || {}
+    const strategy = data.test_strategy || 'basic'
 
     // Overall banner
     renderOverallBanner(scores, evaluation)
@@ -256,6 +525,23 @@ function showResults(data) {
 
     // Run errors
     renderRunErrors(data.run_errors || [])
+
+    // Thresholds
+    renderStrategyBadge(strategy, customThresholds)
+}
+
+function renderStrategyBadge(strategy, customThresholds) {
+    const row = document.getElementById('strategy-badge-row')
+
+    const strategyHtml = strategy === 'isolated'
+        ? `<span class="strategy-badge strategy-isolated">✓ Isolated testing</span>`
+        : `<span class="strategy-badge strategy-basic">⚠ Basic testing</span>`
+
+    const thresholdHtml = customThresholds
+        ? `<span class="thresholds-badge">⚙ Custom thresholds applied</span>`
+        : ''
+
+    row.innerHTML = strategyHtml + thresholdHtml
 }
 
 // ── Overall banner ─────────────────────────────────────────────────────────
