@@ -208,7 +208,7 @@ def stop_compose(project_root):
         print(f'Error stopping compose: {e}')
 
 
-def run_and_measure(project_root, build_system, seed_config=None, port=8080, timeout=60, custom_thresholds=None): # static endpoints
+def run_and_measure(project_root, build_system, seed_config=None, port=8080, timeout=120, custom_thresholds=None): # static endpoints
     """Run application and obtain metrics using Locust"""
     result = {
         'build_success': False,
@@ -253,7 +253,7 @@ def run_and_measure(project_root, build_system, seed_config=None, port=8080, tim
             port=port,
             duration=30,
             users=10,
-            output_path=project_root,
+            project_root=project_root,
             seed_config=seed_config,
             custom_thresholds=custom_thresholds    
             )
@@ -323,7 +323,7 @@ def run_and_measure(project_root, build_system, seed_config=None, port=8080, tim
                 port=port,
                 duration=30,
                 users=10,
-                output_path=project_root,
+                project_root=project_root,
                 seed_config=seed_config,
                 custom_thresholds=custom_thresholds
             )

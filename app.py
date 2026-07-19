@@ -5,6 +5,7 @@ from ai_evaluator import evaluate
 from database import create_tables, insert, get_all, get_by_id
 from endpoint_detector import detect_endpoints, detect_port
 from seed_config import suggest_seed_config
+from locust_runner import detect_content_type
 import os, zipfile, shutil, uuid
 
 app = Flask(__name__)
@@ -54,10 +55,18 @@ def detect():
     if has_writes:
         seed_suggestion = suggest_seed_config(static_endpoints, detection['project_root'])  
     
+    create_ep = next(
+    (ep for ep in static_endpoints if ep['method'].upper() == 'POST'),
+    None
+)
+    content_type = detect_content_type(
+        detection['project_root']
+    )
+
     print(f'Has write endpoints: {has_writes}')
     print(f'Seed suggestion: {seed_suggestion}')
 
-    return jsonify({'file': file.filename, 'extract_path': extract_path, 'endpoints': static_endpoints, 'port': port, 'has_writes': has_writes, 'seed_suggestion': seed_suggestion})
+    return jsonify({'file': file.filename, 'extract_path': extract_path, 'endpoints': static_endpoints, 'port': port, 'has_writes': has_writes, 'seed_suggestion': seed_suggestion, 'create_content_type': content_type})
 
 
 

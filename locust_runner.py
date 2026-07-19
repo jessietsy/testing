@@ -3,27 +3,105 @@ from  endpoint_detector import detect_endpoints, detect_port, discover_endpoints
 from scorer import score_all_endpoints, categorise_endpoint, ENDPOINT_CATEGORIES
 client = docker.from_env()
 
-
 def sanitise_path(path):
     return re.sub(r'\{[^}]+\}', '1', path) # replace path variables like {id} with dummy value '1' for testing purposes
 
-def generate_locust(endpoints, output_path, seed_config=None):
+def detect_content_type(project_root):
+    """
+    Check whether the POST or PUT endpoints use multipart/form-data by scanning controller source for @RequestPart ot Multipart File
+    """
+    skip = ['target', 'build', '.git', 'test']
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for filename in files:
+            if not filename.endswith('.java'):
+                continue
+            filepath = os.path.join(root, filename)
+            try:
+                with open(filepath, 'r', errors='ignore') as f:
+                    content = f.read()
+
+
+                if 'MultipartFile' in content or '@RequestPart' in content:
+                    print(f'Detected multipart/form-data in {filename}')
+                    return 'multipart'
+
+            except Exception:
+                pass
+
+    return 'json'
+
+def detect_search_param(project_root):
+    """
+    Scan controller source for @RequestParam to detect query parameter name for seach endpoints
+    """
+    skip = ['target', 'build', '.git', 'test']
+
+    for root, dirs, files in os.walk(project_root):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for filename in files:
+            if not filename.endswith('.java'):
+                continue
+            filepath = os.path.join(root, filename)
+            try:
+                with open(filepath, 'r', errors='ignore') as f:
+                    content = f.read()
+
+                # Check file handles search
+                if 'search' not in content.lower():
+                    continue
+
+                # Find @RequestParam String <name>
+                match = re.search(
+                    r'@RequestParam\s+(?:String\s+)?(\w+)',
+                    content
+                )
+                if match:
+                    param = match.group(1)
+                    print(f'Detected search param: {param}')
+                    return param
+
+            except Exception:
+                pass
+
+    return 'keyword'  # sensible default
+
+def generate_locust(endpoints, project_root, seed_config=None):
     if seed_config:
-        content = build_isolated_locustfile(endpoints, seed_config)
+        content = build_isolated_locustfile(endpoints, seed_config, project_root=project_root)
     else:
-        content = build_basic_locustfile(endpoints)
+        content = build_basic_locustfile(endpoints, project_root)
 
     print(content)
-    locust_path = os.path.join(output_path, 'locustfile.py')
+    locust_path = os.path.join(project_root, 'locustfile.py')
     with open(locust_path, 'w') as file:
         file.write(content)
 
     return locust_path
 
-def build_isolated_locustfile(endpoints, seed_config):
+def build_isolated_locustfile(endpoints, seed_config, project_root):
     create_path = seed_config['create_endpoint']
     create_body = seed_config['create_body']
     id_field = seed_config.get('id_field', 'id')
+    content_type = detect_content_type(project_root) 
+    search_param = detect_search_param(project_root)
+
+    if content_type == 'multipart':
+        on_start_request = f"""
+        response = self.client.post(
+            "{create_path}",
+            files={{
+                "imageFile": ("test.jpg", b"fake-image-content", "image/jpeg"),
+                "product": (None, json.dumps(body), "application/json")
+            }}
+        )"""
+    else:
+        on_start_request = f"""
+        response = self.client.post(
+            "{create_path}",
+            json=body
+        )"""
+
 
     # Build delete path using dynamic ID
     delete_ep = next(
@@ -42,9 +120,70 @@ def build_isolated_locustfile(endpoints, seed_config):
     tasks = build_tasks(
         endpoints,
         skip_method='DELETE',
-        use_dynamic_id=True
+        use_dynamic_id=True,
+        seed_body=create_body,
+        content_type=content_type,
+        search_param=search_param
     )
 
+    if delete_path and content_type == 'multipart':
+        delete_task = f"""\
+    @task
+    def test_delete(self):
+        body = {create_body}
+        create_response = self.client.post(
+            "{create_path}",
+            files={{
+                "imageFile": ("test.jpg", b"fake-image-content", "image/jpeg"),
+                "product": (None, json.dumps(body), "application/json")
+            }}
+        )
+        if create_response.status_code in [200, 201]:
+            try:
+                temp_id = create_response.json().get('{id_field}')
+                if temp_id:
+                    with self.client.delete(
+                        f"/api/product/{{temp_id}}",
+                        name="/api/product/1",
+                        catch_response=True
+                    ) as response:
+                        if response.status_code >= 400:
+                            response.failure(f"Got {{response.status_code}}")
+                        else:
+                            response.success()
+            except Exception:
+                pass
+
+    """
+    elif delete_path:
+        delete_task = f"""\
+    @task
+    def test_delete(self):
+        body = {create_body}
+        create_response = self.client.post("{create_path}", json=body)
+        if create_response.status_code in [200, 201]:
+            try:
+                temp_id = create_response.json().get('{id_field}')
+                if temp_id:
+                    with self.client.delete(
+                        f"/api/product/{{temp_id}}",
+                        name="/api/product/1",
+                        catch_response=True
+                    ) as response:
+                        if response.status_code >= 400:
+                            response.failure(f"Got {{response.status_code}}")
+                        else:
+                            response.success()
+            except Exception:
+                pass
+
+    """
+    else:
+        delete_task = ""
+
+    tasks = tasks + delete_task
+
+    
     return f"""\
 from locust import HttpUser, task, between
 import json
@@ -54,11 +193,8 @@ class AppUser(HttpUser):
     resource_id = None
 
     def on_start(self):
-        response = self.client.post(
-            "{create_path}",
-            json={create_body},
-            catch_response=True
-        )
+        body = {create_body}
+        {on_start_request}
         if response.status_code in [200, 201]:
             try:
                 data = response.json()
@@ -74,8 +210,11 @@ class AppUser(HttpUser):
 {tasks}
 """
 
-def build_basic_locustfile(endpoints):
-    tasks = build_tasks(endpoints, use_dynamic_id=False)
+def build_basic_locustfile(endpoints, project_root):
+    content_type = detect_content_type(project_root)
+    search_param = detect_search_param(project_root)
+    tasks = build_tasks(endpoints, use_dynamic_id=False, seed_body=None, content_type=content_type, search_param=search_param)
+    
     return f"""\
 from locust import HttpUser, task, between
 
@@ -84,7 +223,7 @@ class AppUser(HttpUser):
 
 {tasks}
 """
-def build_tasks(endpoints, skip_method=None, use_dynamic_id=False):
+def build_tasks(endpoints, skip_method=None, use_dynamic_id=False, seed_body=None, content_type='json', search_param='keyword'):
     """Build Locust task functions generically for any endpoint list"""
     import re
     tasks = ""
@@ -94,42 +233,95 @@ def build_tasks(endpoints, skip_method=None, use_dynamic_id=False):
 
         if skip_method and method == skip_method:
             continue
-
+        
+        if use_dynamic_id and method == 'POST':
+            continue
+        
         path = sanitise_path(ep['path'])
         category = categorise_endpoint(method, ep['path'])
+        original_path = ep['path']
 
         # Replace hardcoded 1 with dynamic resource_id if isolating
         if use_dynamic_id:
-            path = re.sub(r'/1(/|$)', r'/{self.resource_id}\1', path)
-            # Wrap in f-string if dynamic
-            path_str = f'f"{path}"' if 'self.resource_id' in path else f'"{path}"'
+            dynamic_path = re.sub(r'/1(/|$)', r'/{self.resource_id}\1', path)
+            has_dynamic = 'self.resource_id' in dynamic_path
         else:
-            path_str = f'"{path}"'
+            dynamic_path = path
+            has_dynamic = False
+
+        if has_dynamic:
+            path_arg = f'f"{dynamic_path}"'
+            # name groups all dynamic requests under the sanitised path
+            name_arg = f', name="{path}"'
+        else:
+            path_arg = f'"{dynamic_path}"'
+            name_arg = ''
 
         # Append search parameter for search endpoints
         if category == 'search':
-            if use_dynamic_id:
-                path_str = path_str.rstrip('"') + '?q=test"'
+            if has_dynamic:
+                dynamic_path = f'{dynamic_path}?{search_param}=test'
+                path_arg = f'f"{dynamic_path}"'
             else:
-                path_str = f'"{path}?q=test"'
+                dynamic_path = f'{path}?{search_param}=test'
+                path_arg = f'"{dynamic_path}"'
+            
+            name_arg = f', name="{path}"'
 
+        
         if method in ['GET', 'DELETE']:
             tasks += f"""\
     @task
     def endpoint_{i}(self):
-        with self.client.{method.lower()}({path_str}, catch_response=True) as response:
+        with self.client.{method.lower()}({path_arg}{name_arg}, catch_response=True) as response:
             if response.status_code >= 400:
                 response.failure(f"Got {{response.status_code}}")
             else:
                 response.success()
 
 """
-        elif method in ['POST', 'PUT', 'PATCH']:
-            tasks += f"""\
+        elif method in ['PUT', 'PATCH']:
+            if use_dynamic_id and content_type == 'multipart' and seed_body:
+                tasks += f"""\
+    @task
+    def endpoint_{i}(self):
+        body = {seed_body}
+        with self.client.{method.lower()}(
+            {path_arg}{name_arg},
+            files={{
+                "imageFile": ("test.jpg", b"fake-image-content", "image/jpeg"),
+                "product": (None, json.dumps(body), "application/json")
+            }},
+            catch_response=True
+        ) as response:
+            if response.status_code >= 400:
+                response.failure(f"Got {{response.status_code}}")
+            else:
+                response.success()
+
+"""
+            elif use_dynamic_id and seed_body:
+                tasks += f"""\
+    @task
+    def endpoint_{i}(self):
+        body = {seed_body}
+        with self.client.{method.lower()}(
+            {path_arg}{name_arg},
+            json=body,
+            catch_response=True
+        ) as response:
+            if response.status_code >= 400:
+                response.failure(f"Got {{response.status_code}}")
+            else:
+                response.success()
+
+"""
+            else:
+                tasks += f"""\
     @task
     def endpoint_{i}(self):
         with self.client.{method.lower()}(
-            {path_str},
+            {path_arg}{name_arg},
             json={{}},
             catch_response=True
         ) as response:
@@ -181,7 +373,7 @@ def get_endpoints(project_root, host, port):
 
     return []
 
-def run_test(endpoints, container, host, port, duration = 30, users = 10, output_path = '.', seed_config=None, custom_thresholds=None):
+def run_test(endpoints, container, host, port, duration = 30, users = 10, project_root = '.', seed_config=None, custom_thresholds=None):
     result = {
         'success': False,
         'errors': [],
@@ -190,7 +382,7 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
        }
     
     # generate locustfile
-    locust_path = generate_locust(endpoints, output_path, seed_config)
+    locust_path = generate_locust(endpoints, project_root, seed_config)
 
     # wait for app to start
     print(f'Waiting for app on port {port}...')
@@ -279,29 +471,6 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
                 cpu_samples = [s['cpu_percent'] for s in docker_stats]
                 memory_samples = [s['memory_mb'] for s in docker_stats]
 
-                # Aggregate all metrics (Locust and Docker) into a single dictionary for scoring and evaluation
-                # aggregate_all = {
-                #         'total_requests': aggregate_locust.get('num_requests', 0),
-                #         'failed_requests': aggregate_locust.get('num_failures', 0),
-                #         'failure_rate_percent': round(
-                #             aggregate_locust.get('num_failures', 0) /
-                #             aggregate_locust.get('num_requests', 1) * 100, 2
-                #         ),
-                #         'requests_per_second': round(
-                #             aggregate_locust.get('requests_per_sec', 0) or
-                #             aggregate_locust.get('current_rps', 0), 2
-                #         ),
-                #         'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
-                #         'cpu_average_percent': round(
-                #             sum(cpu_samples) / len(cpu_samples), 2
-                #         ) if cpu_samples else 0,
-                #         'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
-                #         'memory_average_mb': round(
-                #             sum(memory_samples) / len(memory_samples), 2
-                #         ) if memory_samples else 0,
-                #         'concurrent_users': users
-                # }
-
                 aggregate_all = get_aggregate(per_endpoint_metrics, docker_stats, users)
                 scores = score_all_endpoints(per_endpoint_metrics, aggregate_all, custom_thresholds=custom_thresholds)
             
@@ -309,27 +478,6 @@ def run_test(endpoints, container, host, port, duration = 30, users = 10, output
                 result['metrics'] = {
                     'per_endpoint': per_endpoint_metrics,
                     'aggregate': aggregate_all,
-                    # 'aggregate': {
-                    #     'total_requests': aggregate.get('num_requests', 0),
-                    #     'failed_requests': aggregate.get('num_failures', 0),
-                    #     'failure_rate_percent': round(
-                    #         aggregate.get('num_failures', 0) /
-                    #         aggregate.get('num_requests', 1) * 100, 2
-                    #     ),
-                    #     'requests_per_second': round(
-                    #         aggregate.get('requests_per_sec', 0) or
-                    #         aggregate.get('current_rps', 0), 2
-                    #     ),
-                    #     'cpu_peak_percent': round(max(cpu_samples), 2) if cpu_samples else 0,
-                    #     'cpu_average_percent': round(
-                    #         sum(cpu_samples) / len(cpu_samples), 2
-                    #     ) if cpu_samples else 0,
-                    #     'memory_peak_mb': round(max(memory_samples), 2) if memory_samples else 0,
-                    #     'memory_average_mb': round(
-                    #         sum(memory_samples) / len(memory_samples), 2
-                    #     ) if memory_samples else 0,
-                    #     'concurrent_users': users
-                    # },
                     'scores': scores
                 }
 
@@ -502,5 +650,6 @@ def calculate_avg_rps(num_reqs_per_sec):
         return 0
     values = list(num_reqs_per_sec.values())
     return round(sum(values) / len(values), 2)
+
 
 

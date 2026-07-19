@@ -55,7 +55,7 @@ Respond ONLY with valid JSON in this exact format, no other text.
     
     try:
         client = genai.Client() # client gets API key from environment variable 'GEMINI_API_KEY' (if not set, it must be passed as argument)
-        model_used = 'gemini-2.5-flash'
+        model_used = 'gemini-3.5-flash'
 
         response = client.models.generate_content(
             model = model_used,

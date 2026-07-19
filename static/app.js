@@ -404,7 +404,15 @@ const writeCount = data.endpoints.filter(ep =>
 
 
         renderThresholdPanel(data.endpoints)
+
+if (data.create_content_type === 'multipart') {
+    document.getElementById('seed-suggestion-note').innerHTML +=
+        '<br><strong>Note:</strong> This endpoint accepts multipart/form-data. ' +
+        'A fake image will be included automatically for seeding.'
 }
+}
+
+
 
 document.getElementById('run-with-seed-btn').addEventListener('click', async () => {
     const bodyText = document.getElementById('seed-body').value.trim()
